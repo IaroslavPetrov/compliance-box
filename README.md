@@ -45,8 +45,8 @@ open http://localhost:3000
 
 ## 📞 Контакты
 
-Автор: [Yaroslav]
-Email: [ya.a.petrov@gmail.com]
+Автор: Yaroslav
+Email: ya.a.petrov@gmail.com
 
 ## 📄 Лицензия
 
