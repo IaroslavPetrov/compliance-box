@@ -18,7 +18,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*", "https://compliance-box-m89i.vercel.app"],
+    allow_origins=["*", "https://compliance-box-m89i.vercel.app", "https://compliance-box.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
