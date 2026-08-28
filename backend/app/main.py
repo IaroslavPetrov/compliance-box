@@ -5,6 +5,7 @@ from typing import List
 
 from app.services.document_generator import document_generator
 from fastapi.responses import Response
+
 from . import models, schemas
 from .database import engine, get_db
 
@@ -47,7 +48,7 @@ def create_tenant(tenant: schemas.TenantCreate, db: Session = Depends(get_db)):
 @app.get("/api/v1/tenants/", response_model=List[schemas.TenantResponse])
 def read_tenants(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     tenants = db.query(models.Tenant).offset(skip).limit(limit).all()
-    return 
+    return list(tenants) if tenants else []
 
 @app.post("/api/v1/documents/policy-152fz")
 async def generate_policy_152fz(tenant_id: int, db: Session = Depends(get_db)):
