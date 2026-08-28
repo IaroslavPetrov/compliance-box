@@ -5,13 +5,14 @@ import { useState } from 'react'
 export default function Home() {
   const [formData, setFormData] = useState({ name: '', inn: '', email: '' })
   const [message, setMessage] = useState('')
+  const [tenantId, setTenantId] = useState<number | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setMessage('Отправка данных на сервер...')
     
     try {
-         const res = await fetch('https://compliance-box-backend.onrender.com/api/v1/tenants/', {
+      const res = await fetch('https://compliance-box-backend.onrender.com/api/v1/tenants/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
@@ -19,6 +20,7 @@ export default function Home() {
       
       if (res.ok) {
         const data = await res.json()
+        setTenantId(data.id)
         setMessage(`✅ Успех! Компания "${data.name}" зарегистрирована. ID: ${data.id}`)
       } else {
         const error = await res.json()
@@ -55,6 +57,26 @@ export default function Home() {
           Зарегистрировать компанию
         </button>
       </form>
+
+      {tenantId && (
+        <button 
+          onClick={() => window.location.href = '/documents'} 
+          style={{ 
+            marginTop: '16px', 
+            padding: '12px 24px', 
+            background: '#10b981', 
+            color: 'white', 
+            border: 'none', 
+            borderRadius: '8px', 
+            fontSize: '14px', 
+            fontWeight: '600', 
+            cursor: 'pointer',
+            width: '100%'
+          }}
+        >
+          📄 Перейти к генерации документов
+        </button>
+      )}
 
       {message && (
         <div style={{ marginTop: '20px', padding: '16px', background: message.includes('✅') ? '#f0fdf4' : '#fef2f2', borderRadius: '8px', color: message.includes('✅') ? '#166534' : '#991b1b', fontSize: '14px' }}>
