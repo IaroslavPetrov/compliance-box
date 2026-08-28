@@ -1,10 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 export default function DocumentsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  
+  // Берем tenantId из URL, если нет - по умолчанию 1
+  const tenantId = searchParams.get('tenantId') || '1'
+  
   const [documents, setDocuments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -29,8 +34,8 @@ export default function DocumentsPage() {
     setMessage('⏳ Генерация документа...')
     
     try {
-      // Для демо используем tenant_id = 1 (первая зарегистрированная компания)
-      const res = await fetch(`https://compliance-box-backend.onrender.com/api/v1/documents/${documentId}?tenant_id=1`, {
+      // Используем реальный tenantId из URL!
+      const res = await fetch(`https://compliance-box-backend.onrender.com/api/v1/documents/${documentId}?tenant_id=${tenantId}`, {
         method: 'POST',
       })
       
@@ -50,7 +55,7 @@ export default function DocumentsPage() {
         setMessage(`❌ Ошибка: ${error.detail || 'Неизвестная ошибка'}`)
       }
     } catch (error) {
-      setMessage(' Ошибка генерации документа')
+      setMessage('❌ Ошибка генерации документа')
     }
   }
 
@@ -76,7 +81,7 @@ export default function DocumentsPage() {
         📄 Генерация документов
       </h1>
       <p style={{ color: '#64748b', marginBottom: '32px' }}>
-        Выберите документ для генерации по 152-ФЗ и ФСТЭК
+        Компания ID: {tenantId}
       </p>
 
       {loading ? (

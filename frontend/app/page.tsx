@@ -20,14 +20,14 @@ export default function Home() {
       
       if (res.ok) {
         const data = await res.json()
-        setTenantId(data.id)
+        setTenantId(data.id) // Запоминаем реальный ID компании
         setMessage(`✅ Успех! Компания "${data.name}" зарегистрирована. ID: ${data.id}`)
       } else {
         const error = await res.json()
         setMessage(`❌ Ошибка: ${error.detail || 'Неизвестная ошибка'}`)
       }
     } catch (error) {
-      setMessage('❌ Ошибка соединения. Убедись, что бэкенд запущен на порту 8000!')
+      setMessage('❌ Ошибка соединения. Убедись, что бэкенд запущен!')
     }
   }
 
@@ -60,7 +60,7 @@ export default function Home() {
 
       {tenantId && (
         <button 
-          onClick={() => window.location.href = '/documents'} 
+          onClick={() => window.location.href = `/documents?tenantId=${tenantId}`} 
           style={{ 
             marginTop: '16px', 
             padding: '12px 24px', 
@@ -74,7 +74,7 @@ export default function Home() {
             width: '100%'
           }}
         >
-          📄 Перейти к генерации документов
+          📄 Перейти к генерации документов (ID: {tenantId})
         </button>
       )}
 
