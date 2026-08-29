@@ -47,77 +47,98 @@ def get_documents_list():
         {"id": "threat-model-fstek", "name": "5. Модель угроз безопасности ПДн (ФСТЭК)"}
     ]
 
+# ============================================================================
+# PDF ENDPOINTS
+# ============================================================================
 @app.post("/api/v1/documents/policy-152fz")
 def generate_policy_152fz(tenant_id: int, db: Session = Depends(get_db)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Компания не найдена")
-    
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     pdf_bytes = bytes(document_generator.generate_policy_152fz(company_data))
-    
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=policy_152fz_{tenant.inn}.pdf"}
-    )
+    return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=policy_152fz_{tenant.inn}.pdf"})
 
 @app.post("/api/v1/documents/consent-152fz")
 def generate_consent_152fz(tenant_id: int, db: Session = Depends(get_db)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Компания не найдена")
-    
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     pdf_bytes = bytes(document_generator.generate_consent_152fz(company_data))
-    
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=consent_152fz_{tenant.inn}.pdf"}
-    )
+    return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=consent_152fz_{tenant.inn}.pdf"})
 
 @app.post("/api/v1/documents/nda-152fz")
 def generate_nda_152fz(tenant_id: int, db: Session = Depends(get_db)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Компания не найдена")
-    
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     pdf_bytes = bytes(document_generator.generate_nda_152fz(company_data))
-    
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=nda_152fz_{tenant.inn}.pdf"}
-    )
+    return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=nda_152fz_{tenant.inn}.pdf"})
 
 @app.post("/api/v1/documents/order-responsible-152fz")
 def generate_order_responsible_152fz(tenant_id: int, db: Session = Depends(get_db)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Компания не найдена")
-    
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     pdf_bytes = bytes(document_generator.generate_order_responsible_152fz(company_data))
-    
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=order_responsible_{tenant.inn}.pdf"}
-    )
+    return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=order_responsible_{tenant.inn}.pdf"})
 
 @app.post("/api/v1/documents/threat-model-fstek")
 def generate_threat_model_fstek(tenant_id: int, db: Session = Depends(get_db)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Компания не найдена")
-    
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     pdf_bytes = bytes(document_generator.generate_threat_model_fstek(company_data))
-    
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=threat_model_fstek_{tenant.inn}.pdf"}
-    )
+    return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=threat_model_fstek_{tenant.inn}.pdf"})
+
+# ============================================================================
+# WORD ENDPOINTS
+# ============================================================================
+@app.post("/api/v1/documents/policy-152fz/word")
+def generate_policy_152fz_word(tenant_id: int, db: Session = Depends(get_db)):
+    tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
+    docx_bytes = bytes(document_generator.generate_policy_152fz_word(company_data))
+    return Response(content=docx_bytes, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", headers={"Content-Disposition": f"attachment; filename=policy_152fz_{tenant.inn}.docx"})
+
+@app.post("/api/v1/documents/consent-152fz/word")
+def generate_consent_152fz_word(tenant_id: int, db: Session = Depends(get_db)):
+    tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
+    docx_bytes = bytes(document_generator.generate_consent_152fz_word(company_data))
+    return Response(content=docx_bytes, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", headers={"Content-Disposition": f"attachment; filename=consent_152fz_{tenant.inn}.docx"})
+
+@app.post("/api/v1/documents/nda-152fz/word")
+def generate_nda_152fz_word(tenant_id: int, db: Session = Depends(get_db)):
+    tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
+    docx_bytes = bytes(document_generator.generate_nda_152fz_word(company_data))
+    return Response(content=docx_bytes, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", headers={"Content-Disposition": f"attachment; filename=nda_152fz_{tenant.inn}.docx"})
+
+@app.post("/api/v1/documents/order-responsible-152fz/word")
+def generate_order_responsible_152fz_word(tenant_id: int, db: Session = Depends(get_db)):
+    tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
+    docx_bytes = bytes(document_generator.generate_order_responsible_152fz_word(company_data))
+    return Response(content=docx_bytes, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", headers={"Content-Disposition": f"attachment; filename=order_responsible_{tenant.inn}.docx"})
+
+@app.post("/api/v1/documents/threat-model-fstek/word")
+def generate_threat_model_fstek_word(tenant_id: int, db: Session = Depends(get_db)):
+    tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
+    docx_bytes = bytes(document_generator.generate_threat_model_fstek_word(company_data))
+    return Response(content=docx_bytes, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", headers={"Content-Disposition": f"attachment; filename=threat_model_fstek_{tenant.inn}.docx"})
