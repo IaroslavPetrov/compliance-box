@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime
 
 from app.database import engine, Base, get_db
 from app import models
@@ -11,6 +12,13 @@ from app.services.document_generator import document_generator
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Compliance Box API")
+
+# ============================================================================
+# HEALTH CHECK (для UptimeRobot)
+# ============================================================================
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "timestamp": datetime.now().isoformat()}
 
 app.add_middleware(
     CORSMiddleware,
