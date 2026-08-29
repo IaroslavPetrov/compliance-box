@@ -1,17 +1,15 @@
 import os
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise ValueError("DATABASE_URL is not set in environment variables")
+    raise ValueError("DATABASE_URL environment variable is not set")
 
-# Удаляем любые случайные пробелы в начале или конце строки (частая ошибка при копировании)
+# Удаляем любые скрытые пробелы или переносы строк по краям
 DATABASE_URL = DATABASE_URL.strip()
 
-# Явно передаем требование SSL через connect_args. 
-# Это самый надежный способ для psycopg2 на Render.
+# Явно требуем SSL через connect_args. Это самый надёжный способ для psycopg2.
 engine = create_engine(
     DATABASE_URL,
     connect_args={"sslmode": "require"}
