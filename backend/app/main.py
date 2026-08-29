@@ -4,6 +4,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
+import traceback
 
 from app.database import engine, Base, get_db
 from app import models
@@ -107,19 +108,33 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 @app.post("/api/v1/auth/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверный email или пароль",
-            headers={"WWW-Authenticate": "Bearer"},
+    try:
+        user = db.query(models.User).filter(models.User.email == form_data.username).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Пользователь с таким email не найден",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        if not verify_password(form_data.password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Неверный пароль",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.id}, expires_delta=access_token_expires
         )
-    
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.id}, expires_delta=access_token_expires
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+        return {"access_token": access_token, "token_type": "bearer"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_trace = traceback.format_exc()
+        print("LOGIN ERROR TRACEBACK:\n", error_trace)
+        raise HTTPException(status_code=500, detail=f"Внутренняя ошибка сервера: {str(e)}")
 
 @app.get("/api/v1/auth/me", response_model=UserResponse)
 def get_me(current_user: models.User = Depends(get_current_user)):
@@ -213,7 +228,7 @@ def delete_tenant(
     return {"message": "Компания удалена"}
 
 # ============================================================================
-# DOCUMENT HISTORY (ИСПРАВЛЕНО: теперь использует Pydantic модель)
+# DOCUMENT HISTORY
 # ============================================================================
 @app.post("/api/v1/documents/history")
 def add_document_history(
@@ -221,7 +236,6 @@ def add_document_history(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # Проверяем, что компания принадлежит пользователю
     tenant = db.query(models.Tenant).filter(
         models.Tenant.id == history_data.tenant_id,
         models.Tenant.user_id == current_user.id
@@ -285,15 +299,11 @@ def get_documents_list():
 @app.post("/api/v1/documents/policy-152fz")
 def generate_policy_152fz(tenant_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id, models.Tenant.user_id == current_user.id).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Компания не найдена")
+    if not tenant: raise HTTPException(status_code=404, detail="Компания не найдена")
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     pdf_bytes = bytes(document_generator.generate_policy_152fz(company_data))
-    
     history = models.DocumentHistory(user_id=current_user.id, tenant_id=tenant.id, document_type="policy-152fz", file_format="pdf", filename=f"policy_152fz_{tenant.inn}.pdf")
-    db.add(history)
-    db.commit()
-    
+    db.add(history); db.commit()
     return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=policy_152fz_{tenant.inn}.pdf"})
 
 @app.post("/api/v1/documents/consent-152fz")
