@@ -8,12 +8,10 @@ from app import models
 from app.schemas import TenantCreate, TenantResponse
 from app.services.document_generator import document_generator
 
-# Создаем таблицы в базе данных при запуске (если их нет)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Compliance Box API")
 
-# Настройка CORS для фронтенда на Vercel
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -28,7 +26,6 @@ def create_tenant(tenant: TenantCreate, db: Session = Depends(get_db)):
     if db_tenant:
         raise HTTPException(status_code=400, detail="Компания с таким ИНН уже существует")
     
-    # Используем model_dump() для Pydantic v2
     new_tenant = models.Tenant(**tenant.model_dump())
     db.add(new_tenant)
     db.commit()
@@ -43,9 +40,11 @@ def read_tenants(skip: int = 0, limit: int = 100, db: Session = Depends(get_db))
 @app.get("/api/v1/documents/list")
 def get_documents_list():
     return [
-        {"id": "policy-152fz", "name": "Политика обработки персональных данных (152-ФЗ)"},
-        {"id": "notification-152fz", "name": "Уведомление об обработке ПДн (152-ФЗ)"},
-        {"id": "threat-model-fstek", "name": "Модель угроз безопасности ПДн (ФСТЭК)"}
+        {"id": "policy-152fz", "name": "1. Политика обработки персональных данных (152-ФЗ)"},
+        {"id": "consent-152fz", "name": "2. Согласие субъекта на обработку ПДн (152-ФЗ)"},
+        {"id": "nda-152fz", "name": "3. Обязательство о неразглашении ПДн (для сотрудников)"},
+        {"id": "order-responsible-152fz", "name": "4. Приказ о назначении ответственного за обработку ПДн"},
+        {"id": "threat-model-fstek", "name": "5. Модель угроз безопасности ПДн (ФСТЭК)"}
     ]
 
 @app.post("/api/v1/documents/policy-152fz")
@@ -54,13 +53,7 @@ def generate_policy_152fz(tenant_id: int, db: Session = Depends(get_db)):
     if not tenant:
         raise HTTPException(status_code=404, detail="Компания не найдена")
     
-    company_data = {
-        "name": tenant.name,
-        "inn": tenant.inn,
-        "email": tenant.email
-    }
-    
-    # ГЛАВНОЕ ИСПРАВЛЕНИЕ: явно оборачиваем результат в bytes()
+    company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     pdf_bytes = bytes(document_generator.generate_policy_152fz(company_data))
     
     return Response(
@@ -69,25 +62,49 @@ def generate_policy_152fz(tenant_id: int, db: Session = Depends(get_db)):
         headers={"Content-Disposition": f"attachment; filename=policy_152fz_{tenant.inn}.pdf"}
     )
 
-@app.post("/api/v1/documents/notification-152fz")
-def generate_notification_152fz(tenant_id: int, db: Session = Depends(get_db)):
+@app.post("/api/v1/documents/consent-152fz")
+def generate_consent_152fz(tenant_id: int, db: Session = Depends(get_db)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Компания не найдена")
     
-    company_data = {
-        "name": tenant.name,
-        "inn": tenant.inn,
-        "email": tenant.email
-    }
-    
-    # ГЛАВНОЕ ИСПРАВЛЕНИЕ: явно оборачиваем результат в bytes()
-    pdf_bytes = bytes(document_generator.generate_notification_152fz(company_data))
+    company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
+    pdf_bytes = bytes(document_generator.generate_consent_152fz(company_data))
     
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=notification_152fz_{tenant.inn}.pdf"}
+        headers={"Content-Disposition": f"attachment; filename=consent_152fz_{tenant.inn}.pdf"}
+    )
+
+@app.post("/api/v1/documents/nda-152fz")
+def generate_nda_152fz(tenant_id: int, db: Session = Depends(get_db)):
+    tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    
+    company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
+    pdf_bytes = bytes(document_generator.generate_nda_152fz(company_data))
+    
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=nda_152fz_{tenant.inn}.pdf"}
+    )
+
+@app.post("/api/v1/documents/order-responsible-152fz")
+def generate_order_responsible_152fz(tenant_id: int, db: Session = Depends(get_db)):
+    tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    
+    company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
+    pdf_bytes = bytes(document_generator.generate_order_responsible_152fz(company_data))
+    
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=order_responsible_{tenant.inn}.pdf"}
     )
 
 @app.post("/api/v1/documents/threat-model-fstek")
@@ -96,13 +113,7 @@ def generate_threat_model_fstek(tenant_id: int, db: Session = Depends(get_db)):
     if not tenant:
         raise HTTPException(status_code=404, detail="Компания не найдена")
     
-    company_data = {
-        "name": tenant.name,
-        "inn": tenant.inn,
-        "email": tenant.email
-    }
-    
-    # ГЛАВНОЕ ИСПРАВЛЕНИЕ: явно оборачиваем результат в bytes()
+    company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     pdf_bytes = bytes(document_generator.generate_threat_model_fstek(company_data))
     
     return Response(
