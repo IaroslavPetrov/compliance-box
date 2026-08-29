@@ -78,6 +78,13 @@ class TenantUpdate(BaseModel):
 # ============================================================================
 # DOCUMENT HISTORY SCHEMAS
 # ============================================================================
+class DocumentHistoryCreate(BaseModel):
+    document_type: str
+    file_format: str
+    filename: str
+    tenant_id: int
+
+
 class DocumentHistoryResponse(BaseModel):
     id: int
     document_type: str

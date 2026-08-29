@@ -10,7 +10,7 @@ from app import models
 from app.schemas import (
     UserCreate, UserLogin, UserResponse, Token, TokenData,
     TenantCreate, TenantResponse, TenantUpdate,
-    DocumentHistoryResponse
+    DocumentHistoryCreate, DocumentHistoryResponse
 )
 from app.services.document_generator import document_generator
 
@@ -126,7 +126,7 @@ def get_me(current_user: models.User = Depends(get_current_user)):
     return current_user
 
 # ============================================================================
-# TENANT ENDPOINTS (теперь привязаны к пользователю)
+# TENANT ENDPOINTS
 # ============================================================================
 @app.post("/api/v1/tenants/", response_model=TenantResponse)
 def create_tenant(
@@ -134,7 +134,6 @@ def create_tenant(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # Проверяем, что ИНН не занят ДРУГИМ пользователем
     existing = db.query(models.Tenant).filter(models.Tenant.inn == tenant.inn).first()
     if existing and existing.user_id != current_user.id:
         raise HTTPException(status_code=400, detail="Компания с таким ИНН уже зарегистрирована другим пользователем")
@@ -214,23 +213,28 @@ def delete_tenant(
     return {"message": "Компания удалена"}
 
 # ============================================================================
-# DOCUMENT HISTORY
+# DOCUMENT HISTORY (ИСПРАВЛЕНО: теперь использует Pydantic модель)
 # ============================================================================
 @app.post("/api/v1/documents/history")
 def add_document_history(
-    document_type: str,
-    file_format: str,
-    filename: str,
-    tenant_id: int,
+    history_data: DocumentHistoryCreate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    # Проверяем, что компания принадлежит пользователю
+    tenant = db.query(models.Tenant).filter(
+        models.Tenant.id == history_data.tenant_id,
+        models.Tenant.user_id == current_user.id
+    ).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+
     history = models.DocumentHistory(
         user_id=current_user.id,
-        tenant_id=tenant_id,
-        document_type=document_type,
-        file_format=file_format,
-        filename=filename
+        tenant_id=history_data.tenant_id,
+        document_type=history_data.document_type,
+        file_format=history_data.file_format,
+        filename=history_data.filename
     )
     db.add(history)
     db.commit()
@@ -263,7 +267,7 @@ def get_document_history(
     return result
 
 # ============================================================================
-# DOCUMENT LIST (публичный)
+# DOCUMENT LIST
 # ============================================================================
 @app.get("/api/v1/documents/list")
 def get_documents_list():
@@ -276,7 +280,7 @@ def get_documents_list():
     ]
 
 # ============================================================================
-# PDF ENDPOINTS (с сохранением в историю)
+# PDF ENDPOINTS
 # ============================================================================
 @app.post("/api/v1/documents/policy-152fz")
 def generate_policy_152fz(tenant_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -286,7 +290,6 @@ def generate_policy_152fz(tenant_id: int, db: Session = Depends(get_db), current
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     pdf_bytes = bytes(document_generator.generate_policy_152fz(company_data))
     
-    # Сохраняем в историю
     history = models.DocumentHistory(user_id=current_user.id, tenant_id=tenant.id, document_type="policy-152fz", file_format="pdf", filename=f"policy_152fz_{tenant.inn}.pdf")
     db.add(history)
     db.commit()
@@ -296,8 +299,7 @@ def generate_policy_152fz(tenant_id: int, db: Session = Depends(get_db), current
 @app.post("/api/v1/documents/consent-152fz")
 def generate_consent_152fz(tenant_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id, models.Tenant.user_id == current_user.id).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Компания не найдена")
+    if not tenant: raise HTTPException(status_code=404, detail="Компания не найдена")
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     pdf_bytes = bytes(document_generator.generate_consent_152fz(company_data))
     history = models.DocumentHistory(user_id=current_user.id, tenant_id=tenant.id, document_type="consent-152fz", file_format="pdf", filename=f"consent_152fz_{tenant.inn}.pdf")
@@ -307,8 +309,7 @@ def generate_consent_152fz(tenant_id: int, db: Session = Depends(get_db), curren
 @app.post("/api/v1/documents/nda-152fz")
 def generate_nda_152fz(tenant_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id, models.Tenant.user_id == current_user.id).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Компания не найдена")
+    if not tenant: raise HTTPException(status_code=404, detail="Компания не найдена")
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     pdf_bytes = bytes(document_generator.generate_nda_152fz(company_data))
     history = models.DocumentHistory(user_id=current_user.id, tenant_id=tenant.id, document_type="nda-152fz", file_format="pdf", filename=f"nda_152fz_{tenant.inn}.pdf")
@@ -318,8 +319,7 @@ def generate_nda_152fz(tenant_id: int, db: Session = Depends(get_db), current_us
 @app.post("/api/v1/documents/order-responsible-152fz")
 def generate_order_responsible_152fz(tenant_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id, models.Tenant.user_id == current_user.id).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Компания не найдена")
+    if not tenant: raise HTTPException(status_code=404, detail="Компания не найдена")
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     pdf_bytes = bytes(document_generator.generate_order_responsible_152fz(company_data))
     history = models.DocumentHistory(user_id=current_user.id, tenant_id=tenant.id, document_type="order-responsible-152fz", file_format="pdf", filename=f"order_responsible_{tenant.inn}.pdf")
@@ -329,8 +329,7 @@ def generate_order_responsible_152fz(tenant_id: int, db: Session = Depends(get_d
 @app.post("/api/v1/documents/threat-model-fstek")
 def generate_threat_model_fstek(tenant_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id, models.Tenant.user_id == current_user.id).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Компания не найдена")
+    if not tenant: raise HTTPException(status_code=404, detail="Компания не найдена")
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     pdf_bytes = bytes(document_generator.generate_threat_model_fstek(company_data))
     history = models.DocumentHistory(user_id=current_user.id, tenant_id=tenant.id, document_type="threat-model-fstek", file_format="pdf", filename=f"threat_model_fstek_{tenant.inn}.pdf")
@@ -338,13 +337,12 @@ def generate_threat_model_fstek(tenant_id: int, db: Session = Depends(get_db), c
     return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=threat_model_fstek_{tenant.inn}.pdf"})
 
 # ============================================================================
-# WORD ENDPOINTS (с сохранением в историю)
+# WORD ENDPOINTS
 # ============================================================================
 @app.post("/api/v1/documents/policy-152fz/word")
 def generate_policy_152fz_word(tenant_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id, models.Tenant.user_id == current_user.id).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Компания не найдена")
+    if not tenant: raise HTTPException(status_code=404, detail="Компания не найдена")
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     docx_bytes = bytes(document_generator.generate_policy_152fz_word(company_data))
     history = models.DocumentHistory(user_id=current_user.id, tenant_id=tenant.id, document_type="policy-152fz", file_format="word", filename=f"policy_152fz_{tenant.inn}.docx")
@@ -354,8 +352,7 @@ def generate_policy_152fz_word(tenant_id: int, db: Session = Depends(get_db), cu
 @app.post("/api/v1/documents/consent-152fz/word")
 def generate_consent_152fz_word(tenant_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id, models.Tenant.user_id == current_user.id).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Компания не найдена")
+    if not tenant: raise HTTPException(status_code=404, detail="Компания не найдена")
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     docx_bytes = bytes(document_generator.generate_consent_152fz_word(company_data))
     history = models.DocumentHistory(user_id=current_user.id, tenant_id=tenant.id, document_type="consent-152fz", file_format="word", filename=f"consent_152fz_{tenant.inn}.docx")
@@ -365,8 +362,7 @@ def generate_consent_152fz_word(tenant_id: int, db: Session = Depends(get_db), c
 @app.post("/api/v1/documents/nda-152fz/word")
 def generate_nda_152fz_word(tenant_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id, models.Tenant.user_id == current_user.id).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Компания не найдена")
+    if not tenant: raise HTTPException(status_code=404, detail="Компания не найдена")
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     docx_bytes = bytes(document_generator.generate_nda_152fz_word(company_data))
     history = models.DocumentHistory(user_id=current_user.id, tenant_id=tenant.id, document_type="nda-152fz", file_format="word", filename=f"nda_152fz_{tenant.inn}.docx")
@@ -376,8 +372,7 @@ def generate_nda_152fz_word(tenant_id: int, db: Session = Depends(get_db), curre
 @app.post("/api/v1/documents/order-responsible-152fz/word")
 def generate_order_responsible_152fz_word(tenant_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id, models.Tenant.user_id == current_user.id).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Компания не найдена")
+    if not tenant: raise HTTPException(status_code=404, detail="Компания не найдена")
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     docx_bytes = bytes(document_generator.generate_order_responsible_152fz_word(company_data))
     history = models.DocumentHistory(user_id=current_user.id, tenant_id=tenant.id, document_type="order-responsible-152fz", file_format="word", filename=f"order_responsible_{tenant.inn}.docx")
@@ -387,8 +382,7 @@ def generate_order_responsible_152fz_word(tenant_id: int, db: Session = Depends(
 @app.post("/api/v1/documents/threat-model-fstek/word")
 def generate_threat_model_fstek_word(tenant_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     tenant = db.query(models.Tenant).filter(models.Tenant.id == tenant_id, models.Tenant.user_id == current_user.id).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Компания не найдена")
+    if not tenant: raise HTTPException(status_code=404, detail="Компания не найдена")
     company_data = {"name": tenant.name, "inn": tenant.inn, "email": tenant.email}
     docx_bytes = bytes(document_generator.generate_threat_model_fstek_word(company_data))
     history = models.DocumentHistory(user_id=current_user.id, tenant_id=tenant.id, document_type="threat-model-fstek", file_format="word", filename=f"threat_model_fstek_{tenant.inn}.docx")
