@@ -31,23 +31,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 # ============================================================================
 # APP INIT
 # ============================================================================
-# Миграция базы данных: пересоздать таблицы
-print("Dropping all tables...")
-Base.metadata.drop_all(bind=engine)
-print("Creating all tables...")
 Base.metadata.create_all(bind=engine)
-print("✅ Database migrated successfully!")
 
 app = FastAPI(title="Compliance Box API")
-
-@app.get("/api/v1/admin/migrate")
-def force_migration(db: Session = Depends(get_db)):
-    try:
-        db.execute(text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS website VARCHAR;"))
-        db.commit()
-        return {"status": "success", "message": "Колонка website добавлена!"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
 
 @app.get("/health")
 def health_check():
@@ -90,23 +76,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: int = payload.get("sub")
         if user_id is None:
-            print(f"DEBUG: Token has no sub. Payload: {payload}")
             raise credentials_exception
-        print(f"DEBUG: Token decoded successfully. Looking for user_id: {user_id}")
-    except JWTError as e:
-        print(f"DEBUG: JWTError: {e}")
+    except JWTError:
         raise credentials_exception
     
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if user is None:
-        print(f"DEBUG: User with id {user_id} NOT FOUND in database!")
-        all_users = db.query(models.User).all()
-        print(f"DEBUG: Total users in DB: {len(all_users)}")
-        for u in all_users:
-            print(f"DEBUG: Found user - ID: {u.id}, Email: {u.email}")
         raise credentials_exception
     
-    print(f"DEBUG: User found: {user.email}")
     return user
 
 # ============================================================================
