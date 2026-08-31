@@ -1,114 +1,130 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
-interface User {
-  id: number;
-  email: string;
-  full_name: string | null;
-}
+// DaData API ключ
+const DADATA_API_KEY = '48be40bb2c09d5cad447aab5b508873f5e7d612b';
 
-interface Tenant {
-  id: number;
-  name: string;
-  inn: string;
-  email: string | null;
-  website: string | null;
-  created_at: string;
-}
-
-export default function DashboardPage() {
-  const [user, setUser] = useState<User | null>(null);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function NewTenantPage() {
+  const [formData, setFormData] = useState({
+    name: '',
+    inn: '',
+    email: '',
+    kpp: '',
+    address: '',
+    phone: '',
+    director_name: '',
+    website: '',
+  });
   const [error, setError] = useState('');
-  const [retrying, setRetrying] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [dadataLoading, setDadataLoading] = useState(false);
+  const [dadataInfo, setDadataInfo] = useState('');
   const router = useRouter();
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/');
-      return;
-    }
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value,
+    });
 
-    fetchUserData(token);
-  }, []);
-
-  const fetchUserData = async (token: string, retryCount = 0) => {
-    try {
-      const [userRes, tenantsRes] = await Promise.all([
-        fetch('https://compliance-box-backend.onrender.com/api/v1/auth/me', {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }),
-        fetch('https://compliance-box-backend.onrender.com/api/v1/tenants/', {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }),
-      ]);
-
-      if (!userRes.ok || !tenantsRes.ok) {
-        throw new Error('Ошибка загрузки данных');
-      }
-
-      const userData = await userRes.json();
-      const tenantsData = await tenantsRes.json();
-
-      setUser(userData);
-      setTenants(tenantsData);
-      setError('');
-    } catch (err: any) {
-      if (retryCount < 2) {
-        setRetrying(true);
-        setError(`Подключение к серверу... Попытка ${retryCount + 1}/3`);
-        setTimeout(() => fetchUserData(token, retryCount + 1), 3000);
+    // Если меняется ИНН - запускаем автозаполнение
+    if (name === 'inn') {
+      const cleanInn = value.replace(/\D/g, '');
+      if (cleanInn.length === 10 || cleanInn.length === 12) {
+        // Debounce: ждём 500мс после последнего изменения
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+          fetchFromDadata(cleanInn);
+        }, 500);
       } else {
-        setError('Не удалось подключиться к серверу. Попробуйте обновить страницу через несколько секунд.');
-        setRetrying(false);
+        setDadataInfo('');
       }
+    }
+  };
+
+  const fetchFromDadata = async (inn: string) => {
+    setDadataLoading(true);
+    setDadataInfo('🔍 Ищем компанию по ИНН...');
+    setError('');
+
+    try {
+      const response = await fetch('https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Token ${DADATA_API_KEY}`,
+        },
+        body: JSON.stringify({ query: inn }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка запроса к DaData');
+      }
+
+      const data = await response.json();
+      
+      if (data.suggestions && data.suggestions.length > 0) {
+        const company = data.suggestions[0];
+        const d = company.data;
+
+        setFormData(prev => ({
+          ...prev,
+          name: d.name?.full_with_opf || company.value || '',
+          kpp: d.kpp || '',
+          address: d.address?.value || '',
+          director_name: d.management?.name || '',
+          phone: d.phones?.[0]?.value || prev.phone,
+        }));
+
+        setDadataInfo(`✅ Найдено: ${company.value}`);
+      } else {
+        setDadataInfo('⚠️ Компания с таким ИНН не найдена. Заполните поля вручную.');
+      }
+    } catch (err: any) {
+      setDadataInfo('❌ Ошибка получения данных от DaData. Заполните поля вручную.');
+      console.error('DaData error:', err);
+    } finally {
+      setDadataLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Не авторизован');
+      }
+
+      const res = await fetch('https://compliance-box-backend.onrender.com/api/v1/tenants/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || 'Ошибка при добавлении компании');
+      }
+
+      router.push('/dashboard');
+    } catch (err: any) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
-
-  const handleRetry = () => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      setLoading(true);
-      setError('');
-      fetchUserData(token);
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    router.push('/');
-  };
-
-  const handleAddCompany = () => {
-    router.push('/dashboard/tenants/new');
-  };
-
-  if (loading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#f5f5f5',
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '1.2rem', color: '#666', marginBottom: '1rem' }}>
-            {retrying ? 'Подключение к серверу...' : 'Загрузка...'}
-          </div>
-          <div style={{ fontSize: '0.9rem', color: '#999' }}>
-            Если сервер "спит", это может занять до 60 секунд
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={{
@@ -117,7 +133,7 @@ export default function DashboardPage() {
       padding: '2rem',
     }}>
       <div style={{
-        maxWidth: '1200px',
+        maxWidth: '600px',
         margin: '0 auto',
       }}>
         <div style={{
@@ -125,31 +141,19 @@ export default function DashboardPage() {
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: '2rem',
-          background: 'white',
-          padding: '1.5rem',
-          borderRadius: '12px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
         }}>
-          <div>
-            <h1 style={{
-              margin: 0,
-              fontSize: '1.75rem',
-              color: '#333',
-            }}>
-              Личный кабинет
-            </h1>
-            <p style={{
-              margin: '0.5rem 0 0',
-              color: '#666',
-            }}>
-              {user?.email}
-            </p>
-          </div>
+          <h1 style={{
+            margin: 0,
+            fontSize: '1.75rem',
+            color: '#333',
+          }}>
+            Добавить компанию
+          </h1>
           <button
-            onClick={handleLogout}
+            onClick={() => router.push('/dashboard')}
             style={{
               padding: '0.75rem 1.5rem',
-              background: '#dc3545',
+              background: '#6c757d',
               color: 'white',
               border: 'none',
               borderRadius: '8px',
@@ -157,173 +161,286 @@ export default function DashboardPage() {
               fontWeight: 'bold',
             }}
           >
-            Выйти
+            Отмена
           </button>
         </div>
 
         <div style={{
           background: 'white',
-          padding: '1.5rem',
+          padding: '2rem',
           borderRadius: '12px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
         }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '1.5rem',
-          }}>
-            <h2 style={{
-              margin: 0,
-              fontSize: '1.5rem',
-              color: '#333',
-            }}>
-              Мои компании
-            </h2>
+          <form onSubmit={handleSubmit}>
+            {/* ИНН - с автозаполнением */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '0.5rem',
+                color: '#333',
+                fontWeight: '500',
+              }}>
+                ИНН *
+              </label>
+              <input
+                type="text"
+                name="inn"
+                value={formData.inn}
+                onChange={handleChange}
+                required
+                pattern="[0-9]{10,12}"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
+                }}
+                placeholder="Введите 10 или 12 цифр"
+              />
+              <small style={{ color: '#666', fontSize: '0.875rem' }}>
+                10 цифр для юрлиц, 12 для ИП
+              </small>
+              {dadataInfo && (
+                <div style={{
+                  marginTop: '0.5rem',
+                  padding: '0.5rem',
+                  background: dadataLoading ? '#fff3cd' : (dadataInfo.includes('✅') ? '#d4edda' : (dadataInfo.includes('❌') ? '#f8d7da' : '#fff3cd')),
+                  borderRadius: '6px',
+                  fontSize: '0.875rem',
+                  color: '#333',
+                }}>
+                  {dadataInfo}
+                </div>
+              )}
+            </div>
+
+            {/* Название */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '0.5rem',
+                color: '#333',
+                fontWeight: '500',
+              }}>
+                Название компании *
+              </label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                required
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
+                }}
+                placeholder="ООО Ромашка"
+              />
+            </div>
+
+            {/* Email */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '0.5rem',
+                color: '#333',
+                fontWeight: '500',
+              }}>
+                Email
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
+                }}
+                placeholder="info@romashka.ru"
+              />
+            </div>
+
+            {/* КПП */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '0.5rem',
+                color: '#333',
+                fontWeight: '500',
+              }}>
+                КПП
+              </label>
+              <input
+                type="text"
+                name="kpp"
+                value={formData.kpp}
+                onChange={handleChange}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
+                }}
+                placeholder="771201001"
+              />
+            </div>
+
+            {/* Адрес */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '0.5rem',
+                color: '#333',
+                fontWeight: '500',
+              }}>
+                Адрес
+              </label>
+              <input
+                type="text"
+                name="address"
+                value={formData.address}
+                onChange={handleChange}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
+                }}
+                placeholder="г. Москва, ул. Примерная, д. 1"
+              />
+            </div>
+
+            {/* Телефон */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '0.5rem',
+                color: '#333',
+                fontWeight: '500',
+              }}>
+                Телефон
+              </label>
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
+                }}
+                placeholder="+7 (495) 123-45-67"
+              />
+            </div>
+
+            {/* ФИО директора */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '0.5rem',
+                color: '#333',
+                fontWeight: '500',
+              }}>
+                ФИО директора
+              </label>
+              <input
+                type="text"
+                name="director_name"
+                value={formData.director_name}
+                onChange={handleChange}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
+                }}
+                placeholder="Иванов Иван Иванович"
+              />
+            </div>
+
+            {/* Сайт */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '0.5rem',
+                color: '#333',
+                fontWeight: '500',
+              }}>
+                Сайт компании
+              </label>
+              <input
+                type="url"
+                name="website"
+                value={formData.website}
+                onChange={handleChange}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
+                }}
+                placeholder="https://romashka.ru"
+              />
+              <small style={{ color: '#666', fontSize: '0.875rem' }}>
+                Необязательно. Будет использоваться для проверки на соответствие 152-ФЗ
+              </small>
+            </div>
+
+            {error && (
+              <div style={{
+                padding: '1rem',
+                background: '#fee',
+                border: '1px solid #fcc',
+                borderRadius: '8px',
+                color: '#c00',
+                marginBottom: '1.5rem',
+              }}>
+                {error}
+              </div>
+            )}
+
             <button
-              onClick={handleAddCompany}
+              type="submit"
+              disabled={loading}
               style={{
-                padding: '0.75rem 1.5rem',
+                width: '100%',
+                padding: '1rem',
                 background: '#28a745',
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
-                cursor: 'pointer',
+                fontSize: '1rem',
                 fontWeight: 'bold',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.7 : 1,
               }}
             >
-              + Добавить компанию
+              {loading ? 'Добавление...' : 'Добавить компанию'}
             </button>
-          </div>
-
-          {error && (
-            <div style={{
-              padding: '1rem',
-              background: '#fee',
-              border: '1px solid #fcc',
-              borderRadius: '8px',
-              color: '#c00',
-              marginBottom: '1rem',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}>
-              <span>{error}</span>
-              {!retrying && (
-                <button
-                  onClick={handleRetry}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    background: '#667eea',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                  }}
-                >
-                  Попробовать снова
-                </button>
-              )}
-            </div>
-          )}
-
-          {tenants.length === 0 ? (
-            <div style={{
-              textAlign: 'center',
-              padding: '3rem',
-              color: '#666',
-            }}>
-              <p style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>
-                У вас пока нет компаний
-              </p>
-              <button
-                onClick={handleAddCompany}
-                style={{
-                  padding: '0.75rem 1.5rem',
-                  background: '#667eea',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                }}
-              >
-                Добавить первую компанию
-              </button>
-            </div>
-          ) : (
-            <div style={{
-              display: 'grid',
-              gap: '1rem',
-            }}>
-              {tenants.map((tenant) => (
-                <div
-                  key={tenant.id}
-                  style={{
-                    padding: '1.25rem',
-                    border: '1px solid #ddd',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    transition: 'box-shadow 0.3s',
-                  }}
-                  onClick={() => router.push(`/documents?tenantId=${tenant.id}`)}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  <h3 style={{
-                    margin: '0 0 0.5rem',
-                    fontSize: '1.25rem',
-                    color: '#333',
-                  }}>
-                    {tenant.name}
-                  </h3>
-                  <p style={{
-                    margin: '0.25rem 0',
-                    color: '#666',
-                  }}>
-                    <strong>ИНН:</strong> {tenant.inn}
-                  </p>
-                  {tenant.email && (
-                    <p style={{
-                      margin: '0.25rem 0',
-                      color: '#666',
-                    }}>
-                      <strong>Email:</strong> {tenant.email}
-                    </p>
-                  )}
-                  {tenant.website && (
-                    <p style={{
-                      margin: '0.25rem 0',
-                      color: '#666',
-                    }}>
-                      <strong>Сайт:</strong>{' '}
-                      <a
-                        href={tenant.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: '#667eea' }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {tenant.website}
-                      </a>
-                    </p>
-                  )}
-                  <p style={{
-                    margin: '0.5rem 0 0',
-                    fontSize: '0.875rem',
-                    color: '#999',
-                  }}>
-                    Добавлена: {new Date(tenant.created_at).toLocaleDateString('ru-RU')}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
+          </form>
         </div>
       </div>
     </div>
