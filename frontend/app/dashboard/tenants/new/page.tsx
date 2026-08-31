@@ -12,6 +12,7 @@ export default function NewTenantPage() {
     address: '',
     phone: '',
     director_name: '',
+    website: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -49,7 +50,6 @@ export default function NewTenantPage() {
         throw new Error(errData.detail || 'Ошибка при добавлении компании');
       }
 
-      // Успешно добавлено — возвращаемся в личный кабинет
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message);
@@ -68,7 +68,6 @@ export default function NewTenantPage() {
         maxWidth: '600px',
         margin: '0 auto',
       }}>
-        {/* Шапка */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -98,7 +97,6 @@ export default function NewTenantPage() {
           </button>
         </div>
 
-        {/* Форма */}
         <div style={{
           background: 'white',
           padding: '2rem',
@@ -106,7 +104,6 @@ export default function NewTenantPage() {
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
         }}>
           <form onSubmit={handleSubmit}>
-            {/* Название */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
@@ -134,7 +131,6 @@ export default function NewTenantPage() {
               />
             </div>
 
-            {/* ИНН */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
@@ -166,7 +162,6 @@ export default function NewTenantPage() {
               </small>
             </div>
 
-            {/* Email */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
@@ -193,7 +188,6 @@ export default function NewTenantPage() {
               />
             </div>
 
-            {/* КПП */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
@@ -220,7 +214,6 @@ export default function NewTenantPage() {
               />
             </div>
 
-            {/* Адрес */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
@@ -247,7 +240,6 @@ export default function NewTenantPage() {
               />
             </div>
 
-            {/* Телефон */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
@@ -274,7 +266,6 @@ export default function NewTenantPage() {
               />
             </div>
 
-            {/* ФИО директора */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
@@ -301,7 +292,35 @@ export default function NewTenantPage() {
               />
             </div>
 
-            {/* Ошибка */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '0.5rem',
+                color: '#333',
+                fontWeight: '500',
+              }}>
+                Сайт компании
+              </label>
+              <input
+                type="url"
+                name="website"
+                value={formData.website}
+                onChange={handleChange}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
+                }}
+                placeholder="https://romashka.ru"
+              />
+              <small style={{ color: '#666', fontSize: '0.875rem' }}>
+                Необязательно. Будет использоваться для проверки на соответствие 152-ФЗ
+              </small>
+            </div>
+
             {error && (
               <div style={{
                 padding: '1rem',
@@ -315,7 +334,6 @@ export default function NewTenantPage() {
               </div>
             )}
 
-            {/* Кнопка отправки */}
             <button
               type="submit"
               disabled={loading}

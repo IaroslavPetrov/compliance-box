@@ -1,7 +1,6 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
-
 
 # ============================================================================
 # USER SCHEMAS
@@ -11,11 +10,9 @@ class UserCreate(BaseModel):
     password: str
     full_name: Optional[str] = None
 
-
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
-
 
 class UserResponse(BaseModel):
     id: int
@@ -26,15 +23,12 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
 class Token(BaseModel):
     access_token: str
     token_type: str
 
-
 class TokenData(BaseModel):
     user_id: Optional[int] = None
-
 
 # ============================================================================
 # TENANT SCHEMAS
@@ -47,7 +41,7 @@ class TenantCreate(BaseModel):
     address: Optional[str] = None
     phone: Optional[str] = None
     director_name: Optional[str] = None
-
+    website: Optional[str] = None
 
 class TenantResponse(BaseModel):
     id: int
@@ -58,12 +52,11 @@ class TenantResponse(BaseModel):
     address: Optional[str] = None
     phone: Optional[str] = None
     director_name: Optional[str] = None
-    user_id: int
+    website: Optional[str] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
-
 
 class TenantUpdate(BaseModel):
     name: Optional[str] = None
@@ -73,17 +66,16 @@ class TenantUpdate(BaseModel):
     address: Optional[str] = None
     phone: Optional[str] = None
     director_name: Optional[str] = None
-
+    website: Optional[str] = None
 
 # ============================================================================
 # DOCUMENT HISTORY SCHEMAS
 # ============================================================================
 class DocumentHistoryCreate(BaseModel):
+    tenant_id: int
     document_type: str
     file_format: str
     filename: str
-    tenant_id: int
-
 
 class DocumentHistoryResponse(BaseModel):
     id: int

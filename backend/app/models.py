@@ -1,53 +1,50 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Text
 from sqlalchemy.orm import relationship
+from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
-from app.database import Base
 
+Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
     full_name = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Связи
-    tenants = relationship("Tenant", back_populates="owner", cascade="all, delete-orphan")
-    documents_history = relationship("DocumentHistory", back_populates="user", cascade="all, delete-orphan")
-
+    tenants = relationship("Tenant", back_populates="user")
+    document_history = relationship("DocumentHistory", back_populates="user")
 
 class Tenant(Base):
     __tablename__ = "tenants"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    inn = Column(String, unique=True, index=True, nullable=False)
-    email = Column(String, nullable=True)
+    name = Column(String, index=True)
+    inn = Column(String, unique=True, index=True)
+    email = Column(String)
     kpp = Column(String, nullable=True)
     address = Column(String, nullable=True)
     phone = Column(String, nullable=True)
     director_name = Column(String, nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    website = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(Integer, ForeignKey("users.id"))
 
-    # Связи
-    owner = relationship("User", back_populates="tenants")
-    documents_history = relationship("DocumentHistory", back_populates="tenant", cascade="all, delete-orphan")
-
+    user = relationship("User", back_populates="tenants")
+    document_history = relationship("DocumentHistory", back_populates="tenant")
 
 class DocumentHistory(Base):
-    __tablename__ = "documents_history"
+    __tablename__ = "document_history"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
-    document_type = Column(String, nullable=False)
-    file_format = Column(String, nullable=False)  # pdf или word
-    filename = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    tenant_id = Column(Integer, ForeignKey("tenants.id"))
+    document_type = Column(String)
+    file_format = Column(String)
+    filename = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Связи
-    user = relationship("User", back_populates="documents_history")
-    tenant = relationship("Tenant", back_populates="documents_history")
+    user = relationship("User", back_populates="document_history")
+    tenant = relationship("Tenant", back_populates="document_history")

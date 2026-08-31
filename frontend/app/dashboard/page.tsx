@@ -14,6 +14,7 @@ interface Tenant {
   name: string;
   inn: string;
   email: string | null;
+  website: string | null;
   created_at: string;
 }
 
@@ -22,6 +23,7 @@ export default function DashboardPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retrying, setRetrying] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export default function DashboardPage() {
     fetchUserData(token);
   }, []);
 
-  const fetchUserData = async (token: string) => {
+  const fetchUserData = async (token: string, retryCount = 0) => {
     try {
       const [userRes, tenantsRes] = await Promise.all([
         fetch('https://compliance-box-backend.onrender.com/api/v1/auth/me', {
@@ -54,10 +56,27 @@ export default function DashboardPage() {
 
       setUser(userData);
       setTenants(tenantsData);
+      setError('');
     } catch (err: any) {
-      setError(err.message);
+      if (retryCount < 2) {
+        setRetrying(true);
+        setError(`Подключение к серверу... Попытка ${retryCount + 1}/3`);
+        setTimeout(() => fetchUserData(token, retryCount + 1), 3000);
+      } else {
+        setError('Не удалось подключиться к серверу. Попробуйте обновить страницу через несколько секунд.');
+        setRetrying(false);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRetry = () => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      setLoading(true);
+      setError('');
+      fetchUserData(token);
     }
   };
 
@@ -79,7 +98,14 @@ export default function DashboardPage() {
         justifyContent: 'center',
         background: '#f5f5f5',
       }}>
-        <div>Загрузка...</div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '1.2rem', color: '#666', marginBottom: '1rem' }}>
+            {retrying ? 'Подключение к серверу...' : 'Загрузка...'}
+          </div>
+          <div style={{ fontSize: '0.9rem', color: '#999' }}>
+            Если сервер "спит", это может занять до 60 секунд
+          </div>
+        </div>
       </div>
     );
   }
@@ -94,7 +120,6 @@ export default function DashboardPage() {
         maxWidth: '1200px',
         margin: '0 auto',
       }}>
-        {/* Шапка */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -136,7 +161,6 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {/* Список компаний */}
         <div style={{
           background: 'white',
           padding: '1.5rem',
@@ -180,8 +204,27 @@ export default function DashboardPage() {
               borderRadius: '8px',
               color: '#c00',
               marginBottom: '1rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
             }}>
-              {error}
+              <span>{error}</span>
+              {!retrying && (
+                <button
+                  onClick={handleRetry}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    background: '#667eea',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  Попробовать снова
+                </button>
+              )}
             </div>
           )}
 
@@ -251,6 +294,23 @@ export default function DashboardPage() {
                       color: '#666',
                     }}>
                       <strong>Email:</strong> {tenant.email}
+                    </p>
+                  )}
+                  {tenant.website && (
+                    <p style={{
+                      margin: '0.25rem 0',
+                      color: '#666',
+                    }}>
+                      <strong>Сайт:</strong>{' '}
+                      <a
+                        href={tenant.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: '#667eea' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {tenant.website}
+                      </a>
                     </p>
                   )}
                   <p style={{
