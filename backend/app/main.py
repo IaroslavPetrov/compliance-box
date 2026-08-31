@@ -34,7 +34,31 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Compliance Box API")
-    
+
+# ============================================================================
+# ВРЕМЕННАЯ МИГРАЦИЯ (удалим после успеха)
+# ============================================================================
+@app.get("/api/v1/admin/create-history-table")
+def create_history_table(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS document_history (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                tenant_id INTEGER REFERENCES tenants(id),
+                document_type VARCHAR,
+                file_format VARCHAR,
+                filename VARCHAR,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS ix_document_history_id ON document_history(id);
+        """))
+        db.commit()
+        return {"status": "success", "message": "Таблица document_history успешно создана!"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+# ============================================================================
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
