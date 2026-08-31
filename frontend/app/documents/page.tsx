@@ -38,6 +38,8 @@ export default function DocumentsPage() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000);
       
+      const token = localStorage.getItem('token');
+      
       const endpoint = format === 'pdf' 
         ? docId 
         : `${docId}/word`;
@@ -46,6 +48,9 @@ export default function DocumentsPage() {
         `https://compliance-box-backend.onrender.com/api/v1/documents/${endpoint}?tenant_id=${tenantId}`, 
         {
           method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,  // ← ДОБАВЛЕНО
+          },
           signal: controller.signal,
         }
       );
@@ -71,9 +76,9 @@ export default function DocumentsPage() {
       setProgress('');
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        setError('Превышено время ожидания (60 сек). Попробуйте ещё раз.');
+        setError(' Превышено время ожидания (60 сек). Попробуйте ещё раз.');
       } else {
-        setError(`Ошибка: ${err.message}`);
+        setError(`❌ Ошибка: ${err.message}`);
       }
       setProgress('');
     } finally {
@@ -126,7 +131,7 @@ export default function DocumentsPage() {
                     fontSize: '0.9rem'
                   }}
                 >
-                  {isGeneratingWord ? '⏳ ...' : ' Word'}
+                  {isGeneratingWord ? ' ...' : '📝 Word'}
                 </button>
               </div>
             </div>
