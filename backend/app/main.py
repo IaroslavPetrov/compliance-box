@@ -35,6 +35,15 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Compliance Box API")
 
+@app.get("/api/v1/admin/migrate-tables")
+def force_create_tables():
+    try:
+        # Эта команда создаст все таблицы, которых не хватает (включая document_history)
+        Base.metadata.create_all(bind=engine)
+        return {"status": "success", "message": "Таблицы успешно созданы/обновлены!"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    
 @app.get("/health")
 def health_check():
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
