@@ -30,6 +30,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 # ============================================================================
 # APP INIT
 # ============================================================================
+# Миграция: пересоздать таблицы
+Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Compliance Box API")
