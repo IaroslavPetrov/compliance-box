@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 
@@ -38,6 +39,15 @@ Base.metadata.create_all(bind=engine)
 print("✅ Database migrated successfully!")
 
 app = FastAPI(title="Compliance Box API")
+
+@app.get("/api/v1/admin/migrate")
+def force_migration(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS website VARCHAR;"))
+        db.commit()
+        return {"status": "success", "message": "Колонка website добавлена!"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @app.get("/health")
 def health_check():
