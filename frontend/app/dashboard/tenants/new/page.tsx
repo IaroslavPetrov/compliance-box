@@ -1,7 +1,10 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+
+// DaData API ключ
+const DADATA_API_KEY = '48be40bb2c09d5cad447aab5b508873f5e7d612b';
 
 export default function NewTenantPage() {
   const [formData, setFormData] = useState({
@@ -16,17 +19,90 @@ export default function NewTenantPage() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [dadataLoading, setDadataLoading] = useState(false);
+  const [dadataInfo, setDadataInfo] = useState('');
   const router = useRouter();
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     });
+
+    // Если меняется ИНН - запускаем автозаполнение
+    if (name === 'inn') {
+      const cleanInn = value.replace(/\D/g, '');
+      if (cleanInn.length === 10 || cleanInn.length === 12) {
+        // Debounce: ждём 500мс после последнего изменения
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+          fetchFromDadata(cleanInn);
+        }, 500);
+      } else {
+        setDadataInfo('');
+      }
+    }
+  };
+
+  const fetchFromDadata = async (inn: string) => {
+    setDadataLoading(true);
+    setDadataInfo('🔍 Ищем компанию по ИНН...');
+    setError('');
+
+    try {
+      const response = await fetch('https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Token ${DADATA_API_KEY}`,
+        },
+        body: JSON.stringify({ query: inn }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка запроса к DaData');
+      }
+
+      const data = await response.json();
+      
+      if (data.suggestions && data.suggestions.length > 0) {
+        const company = data.suggestions[0];
+        const d = company.data;
+
+        setFormData(prev => ({
+          ...prev,
+          name: d.name?.full_with_opf || company.value || '',
+          kpp: d.kpp || '',
+          address: d.address?.value || '',
+          director_name: d.management?.name || '',
+          phone: d.phones?.[0]?.value || prev.phone,
+        }));
+
+        setDadataInfo(`✅ Найдено: ${company.value}`);
+      } else {
+        setDadataInfo('️ Компания с таким ИНН не найдена. Заполните поля вручную.');
+      }
+    } catch (err: any) {
+      setDadataInfo('❌ Ошибка получения данных от DaData. Заполните поля вручную.');
+      console.error('DaData error:', err);
+    } finally {
+      setDadataLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Валидация ИНН
+    const cleanInn = formData.inn.replace(/\D/g, '');
+    if (cleanInn.length !== 10 && cleanInn.length !== 12) {
+      setError('ИНН должен содержать 10 цифр (для юрлиц) или 12 цифр (для ИП)');
+      return;
+    }
+
     setError('');
     setLoading(true);
 
@@ -104,6 +180,50 @@ export default function NewTenantPage() {
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
         }}>
           <form onSubmit={handleSubmit}>
+            {/* ИНН - с автозаполнением */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '0.5rem',
+                color: '#333',
+                fontWeight: '500',
+              }}>
+                ИНН *
+              </label>
+              <input
+                type="text"
+                name="inn"
+                value={formData.inn}
+                onChange={handleChange}
+                required
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
+                }}
+                placeholder="Введите 10 или 12 цифр"
+              />
+              <small style={{ color: '#666', fontSize: '0.875rem' }}>
+                10 цифр для юрлиц, 12 для ИП
+              </small>
+              {dadataInfo && (
+                <div style={{
+                  marginTop: '0.5rem',
+                  padding: '0.5rem',
+                  background: dadataLoading ? '#fff3cd' : (dadataInfo.includes('✅') ? '#d4edda' : (dadataInfo.includes('❌') ? '#f8d7da' : '#fff3cd')),
+                  borderRadius: '6px',
+                  fontSize: '0.875rem',
+                  color: '#333',
+                }}>
+                  {dadataInfo}
+                </div>
+              )}
+            </div>
+
+            {/* Название */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
@@ -131,37 +251,7 @@ export default function NewTenantPage() {
               />
             </div>
 
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{
-                display: 'block',
-                marginBottom: '0.5rem',
-                color: '#333',
-                fontWeight: '500',
-              }}>
-                ИНН *
-              </label>
-              <input
-                type="text"
-                name="inn"
-                value={formData.inn}
-                onChange={handleChange}
-                required
-                pattern="[0-9]{10,12}"
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '8px',
-                  fontSize: '1rem',
-                  boxSizing: 'border-box',
-                }}
-                placeholder="7712345678"
-              />
-              <small style={{ color: '#666', fontSize: '0.875rem' }}>
-                10 цифр для юрлиц, 12 для ИП
-              </small>
-            </div>
-
+            {/* Email */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
@@ -188,6 +278,7 @@ export default function NewTenantPage() {
               />
             </div>
 
+            {/* КПП */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
@@ -214,6 +305,7 @@ export default function NewTenantPage() {
               />
             </div>
 
+            {/* Адрес */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
@@ -240,6 +332,7 @@ export default function NewTenantPage() {
               />
             </div>
 
+            {/* Телефон */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
@@ -266,6 +359,7 @@ export default function NewTenantPage() {
               />
             </div>
 
+            {/* ФИО директора */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
@@ -292,6 +386,7 @@ export default function NewTenantPage() {
               />
             </div>
 
+            {/* Сайт */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
