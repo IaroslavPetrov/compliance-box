@@ -32,8 +32,24 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 # ============================================================================
 # APP INIT
 # ============================================================================
-# Эта команда создаст таблицу pd_subjects при перезапуске сервиса на Render!
+# Создаём все таблицы
 Base.metadata.create_all(bind=engine)
+
+# Принудительно создаём таблицу pd_subjects, если её нет
+with engine.connect() as conn:
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS pd_subjects (
+            id SERIAL PRIMARY KEY,
+            full_name VARCHAR NOT NULL,
+            category VARCHAR NOT NULL,
+            legal_basis VARCHAR NOT NULL,
+            data_types TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            tenant_id INTEGER REFERENCES tenants(id),
+            user_id INTEGER REFERENCES users(id)
+        )
+    """))
+    conn.commit()
 
 app = FastAPI(title="Compliance Box API")
 
@@ -172,8 +188,6 @@ def read_tenants(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # БЕЗОПАСНАЯ ВЕРСИЯ: не запрашиваем PdSubject, чтобы избежать 500 ошибки, 
-    # пока таблица не создана. Pydantic сам подставит pd_subjects_count = 0.
     tenants = db.query(models.Tenant).filter(
         models.Tenant.user_id == current_user.id
     ).offset(skip).limit(limit).all()
@@ -235,7 +249,7 @@ def delete_tenant(
 # ============================================================================
 # PD SUBJECTS REGISTRY (РЕЕСТР СУБЪЕКТОВ ПДн)
 # ============================================================================
-FREE_TIER_LIMIT = 10  # Заглушка лимита для бесплатного тариф
+FREE_TIER_LIMIT = 10  # Заглушка лимита для бесплатного тарифа
 
 @app.get("/api/v1/pd-subjects/", response_model=List[PdSubjectResponse])
 def get_pd_subjects(
