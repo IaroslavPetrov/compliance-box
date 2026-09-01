@@ -458,6 +458,36 @@ export default function DashboardPage() {
                       gap: '0.5rem',
                       flexShrink: 0,
                     }}>
+                      {/* НОВАЯ КНОПКА: Реестр ПДн */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/dashboard/registry?tenantId=${tenant.id}`);
+                        }}
+                        style={{
+                          padding: '0.5rem 1rem',
+                          background: 'transparent',
+                          color: '#00C853',
+                          border: '1px solid #00C853',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontWeight: '600',
+                          fontSize: '0.85rem',
+                          transition: 'all 0.3s',
+                          whiteSpace: 'nowrap',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#00C853';
+                          e.currentTarget.style.color = '#FFFFFF';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.color = '#00C853';
+                        }}
+                      >
+                        📋 Реестр ПДн
+                      </button>
+
                       {tenant.website && (
                         <button
                           onClick={(e) => {
