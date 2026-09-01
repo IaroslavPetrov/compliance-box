@@ -48,7 +48,6 @@ export default function RegistryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Модалка добавления/редактирования
   const [showModal, setShowModal] = useState(false);
   const [editingSubject, setEditingSubject] = useState<PdSubject | null>(null);
   const [formData, setFormData] = useState({
@@ -60,7 +59,6 @@ export default function RegistryPage() {
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState('');
 
-  // Модалка удаления
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -461,8 +459,9 @@ export default function RegistryPage() {
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = '#4A90E2'; e.currentTarget.style.color = '#FFFFFF'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#4A90E2'; }}
+                    title="Редактировать"
                   >
-                    ️
+                    ✏️
                   </button>
                   <button
                     onClick={() => setDeleteConfirmId(subject.id)}
@@ -479,8 +478,9 @@ export default function RegistryPage() {
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = '#FF4444'; e.currentTarget.style.color = '#FFFFFF'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#FF4444'; }}
+                    title="Удалить"
                   >
-                    ️
+                    🗑️
                   </button>
                 </div>
               </div>
@@ -633,7 +633,7 @@ export default function RegistryPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>️</div>
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
               <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.5rem', fontWeight: '700', color: '#FFFFFF' }}>Удалить запись?</h2>
               <p style={{ margin: 0, color: '#A0A0A0', fontSize: '0.95rem' }}>Это действие нельзя отменить.</p>
             </div>
