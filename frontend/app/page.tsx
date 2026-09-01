@@ -89,56 +89,80 @@ export default function HomePage() {
     }
   };
 
+  // Стили для инпутов с эффектом фокуса
+  const inputStyle = {
+    width: '100%',
+    padding: '0.875rem',
+    border: '1px solid #2A2A2A',
+    borderRadius: '8px',
+    fontSize: '1rem',
+    background: '#0A0A0A',
+    color: '#FFFFFF',
+    boxSizing: 'border-box' as const,
+    transition: 'border-color 0.3s, box-shadow 0.3s',
+    outline: 'none',
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      background: '#0A0A0A',
       padding: '2rem',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
     }}>
       <div style={{
-        background: 'white',
+        background: '#1A1A1A',
         borderRadius: '16px',
-        padding: '2.5rem',
-        maxWidth: '450px',
+        padding: '3rem',
+        maxWidth: '480px',
         width: '100%',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+        border: '1px solid #2A2A2A',
       }}>
-        <h1 style={{
-          textAlign: 'center',
-          color: '#333',
-          marginBottom: '0.5rem',
-          fontSize: '2rem',
-        }}>
-          ComplianceBox
-        </h1>
-        <p style={{
-          textAlign: 'center',
-          color: '#666',
-          marginBottom: '2rem',
-        }}>
-          Генератор юридических документов
-        </p>
+        {/* Логотип и заголовок */}
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <h1 style={{
+            margin: 0,
+            color: '#FFFFFF',
+            fontSize: '2.5rem',
+            fontWeight: '700',
+            letterSpacing: '-0.02em',
+          }}>
+            Compliance<span style={{ color: '#FF6B35' }}>Box</span>
+          </h1>
+          <p style={{
+            margin: '0.5rem 0 0',
+            color: '#A0A0A0',
+            fontSize: '1rem',
+          }}>
+            Генератор юридических документов
+          </p>
+        </div>
 
+        {/* Переключатель Вход / Регистрация */}
         <div style={{
           display: 'flex',
           marginBottom: '2rem',
-          background: '#f5f5f5',
+          background: '#0A0A0A',
           borderRadius: '8px',
           padding: '4px',
+          border: '1px solid #2A2A2A',
         }}>
           <button
+            type="button"
             onClick={() => setIsLogin(true)}
             style={{
               flex: 1,
               padding: '0.75rem',
               border: 'none',
               borderRadius: '6px',
-              background: isLogin ? 'white' : 'transparent',
-              color: isLogin ? '#667eea' : '#666',
-              fontWeight: 'bold',
+              background: isLogin ? '#FF6B35' : 'transparent',
+              color: isLogin ? '#FFFFFF' : '#A0A0A0',
+              fontWeight: '600',
+              fontSize: '0.95rem',
               cursor: 'pointer',
               transition: 'all 0.3s',
             }}
@@ -146,15 +170,17 @@ export default function HomePage() {
             Вход
           </button>
           <button
+            type="button"
             onClick={() => setIsLogin(false)}
             style={{
               flex: 1,
               padding: '0.75rem',
               border: 'none',
               borderRadius: '6px',
-              background: !isLogin ? 'white' : 'transparent',
-              color: !isLogin ? '#667eea' : '#666',
-              fontWeight: 'bold',
+              background: !isLogin ? '#FF6B35' : 'transparent',
+              color: !isLogin ? '#FFFFFF' : '#A0A0A0',
+              fontWeight: '600',
+              fontSize: '0.95rem',
               cursor: 'pointer',
               transition: 'all 0.3s',
             }}
@@ -169,8 +195,9 @@ export default function HomePage() {
               <label style={{
                 display: 'block',
                 marginBottom: '0.5rem',
-                color: '#333',
+                color: '#FFFFFF',
                 fontWeight: '500',
+                fontSize: '0.9rem',
               }}>
                 ФИО (необязательно)
               </label>
@@ -179,15 +206,16 @@ export default function HomePage() {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 autoComplete="off"
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '8px',
-                  fontSize: '1rem',
-                  boxSizing: 'border-box',
-                }}
+                style={inputStyle}
                 placeholder="Иванов Иван Иванович"
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#FF6B35';
+                  e.target.style.boxShadow = '0 0 0 3px rgba(255, 107, 53, 0.1)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#2A2A2A';
+                  e.target.style.boxShadow = 'none';
+                }}
               />
             </div>
           )}
@@ -196,8 +224,9 @@ export default function HomePage() {
             <label style={{
               display: 'block',
               marginBottom: '0.5rem',
-              color: '#333',
+              color: '#FFFFFF',
               fontWeight: '500',
+              fontSize: '0.9rem',
             }}>
               Email
             </label>
@@ -207,15 +236,16 @@ export default function HomePage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="off"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #ddd',
-                borderRadius: '8px',
-                fontSize: '1rem',
-                boxSizing: 'border-box',
-              }}
+              style={inputStyle}
               placeholder="you@example.com"
+              onFocus={(e) => {
+                e.target.style.borderColor = '#FF6B35';
+                e.target.style.boxShadow = '0 0 0 3px rgba(255, 107, 53, 0.1)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = '#2A2A2A';
+                e.target.style.boxShadow = 'none';
+              }}
             />
           </div>
 
@@ -223,8 +253,9 @@ export default function HomePage() {
             <label style={{
               display: 'block',
               marginBottom: '0.5rem',
-              color: '#333',
+              color: '#FFFFFF',
               fontWeight: '500',
+              fontSize: '0.9rem',
             }}>
               Пароль
             </label>
@@ -236,29 +267,31 @@ export default function HomePage() {
               minLength={6}
               maxLength={72}
               autoComplete="off"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #ddd',
-                borderRadius: '8px',
-                fontSize: '1rem',
-                boxSizing: 'border-box',
-              }}
+              style={inputStyle}
               placeholder="••••••••"
+              onFocus={(e) => {
+                e.target.style.borderColor = '#FF6B35';
+                e.target.style.boxShadow = '0 0 0 3px rgba(255, 107, 53, 0.1)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = '#2A2A2A';
+                e.target.style.boxShadow = 'none';
+              }}
             />
-            <small style={{ color: '#999', fontSize: '0.8rem', marginTop: '4px', display: 'block' }}>
+            <small style={{ color: '#666666', fontSize: '0.8rem', marginTop: '6px', display: 'block' }}>
               Введите вручную, без пробелов. Макс. 72 символа.
             </small>
           </div>
 
           {error && (
             <div style={{
-              padding: '0.75rem',
-              background: '#fee',
-              border: '1px solid #fcc',
+              padding: '1rem',
+              background: 'rgba(255, 23, 68, 0.1)',
+              border: '1px solid #FF1744',
               borderRadius: '8px',
-              color: '#c00',
+              color: '#FF1744',
               marginBottom: '1.5rem',
+              fontSize: '0.9rem',
             }}>
               {error}
             </div>
@@ -269,21 +302,38 @@ export default function HomePage() {
             disabled={loading}
             style={{
               width: '100%',
-              padding: '0.875rem',
-              background: '#667eea',
-              color: 'white',
+              padding: '1rem',
+              background: loading ? '#4A4A4A' : '#FF6B35',
+              color: '#FFFFFF',
               border: 'none',
               borderRadius: '8px',
               fontSize: '1rem',
-              fontWeight: 'bold',
+              fontWeight: '600',
               cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.7 : 1,
-              transition: 'background 0.3s',
+              transition: 'background 0.3s, transform 0.1s',
+              letterSpacing: '0.02em',
+            }}
+            onMouseDown={(e) => {
+              if (!loading) e.currentTarget.style.transform = 'scale(0.98)';
+            }}
+            onMouseUp={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
             }}
           >
             {loading ? 'Загрузка...' : isLogin ? 'Войти' : 'Зарегистрироваться'}
           </button>
         </form>
+
+        {/* Футер */}
+        <p style={{
+          textAlign: 'center',
+          color: '#4A4A4A',
+          fontSize: '0.8rem',
+          marginTop: '2rem',
+          marginBottom: 0,
+        }}>
+          © 2026 ComplianceBox. Все права защищены.
+        </p>
       </div>
     </div>
   );
