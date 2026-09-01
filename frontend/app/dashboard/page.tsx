@@ -272,7 +272,7 @@ export default function DashboardPage() {
                     cursor: 'pointer',
                     transition: 'all 0.3s ease',
                   }}
-                  onClick={() => router.push(`/documents?tenantId=${tenant.id}`)}
+                  onClick={() => router.push(`/dashboard/documents?tenantId=${tenant.id}`)}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = '#FF6B35';
                     e.currentTarget.style.background = '#1A1A1A';
