@@ -15,13 +15,23 @@ export default function HomePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    // Очищаем пароль от случайных пробелов и символов
+    const cleanPassword = password.trim();
+    const cleanEmail = email.trim();
+
+    if (cleanPassword.length > 72) {
+      setError('Пароль слишком длинный (макс. 72 символа). Проверьте, не сработало ли автозаполнение.');
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (isLogin) {
         const formData = new FormData();
-        formData.append('username', email);
-        formData.append('password', password);
+        formData.append('username', cleanEmail);
+        formData.append('password', cleanPassword);
         formData.append('grant_type', 'password');
 
         const res = await fetch('https://compliance-box-backend.onrender.com/api/v1/auth/login', {
@@ -44,9 +54,9 @@ export default function HomePage() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            email,
-            password,
-            full_name: fullName || null,
+            email: cleanEmail,
+            password: cleanPassword,
+            full_name: fullName.trim() || null,
           }),
         });
 
@@ -55,9 +65,10 @@ export default function HomePage() {
           throw new Error(errData.detail || 'Ошибка регистрации');
         }
 
+        // Автоматический вход после регистрации
         const formData = new FormData();
-        formData.append('username', email);
-        formData.append('password', password);
+        formData.append('username', cleanEmail);
+        formData.append('password', cleanPassword);
         formData.append('grant_type', 'password');
 
         const loginRes = await fetch('https://compliance-box-backend.onrender.com/api/v1/auth/login', {
@@ -167,6 +178,7 @@ export default function HomePage() {
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
+                autoComplete="off"
                 style={{
                   width: '100%',
                   padding: '0.75rem',
@@ -194,6 +206,7 @@ export default function HomePage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoComplete="off"
               style={{
                 width: '100%',
                 padding: '0.75rem',
@@ -221,6 +234,8 @@ export default function HomePage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
+              maxLength={72}
+              autoComplete="off"
               style={{
                 width: '100%',
                 padding: '0.75rem',
@@ -231,6 +246,9 @@ export default function HomePage() {
               }}
               placeholder="••••••••"
             />
+            <small style={{ color: '#999', fontSize: '0.8rem', marginTop: '4px', display: 'block' }}>
+              Введите вручную, без пробелов. Макс. 72 символа.
+            </small>
           </div>
 
           {error && (
