@@ -401,11 +401,12 @@ def generate_threat_model_fstek_word(tenant_id: int, db: Session = Depends(get_d
     return Response(content=docx_bytes, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", headers={"Content-Disposition": f"attachment; filename=threat_model_fstek_{tenant.inn}.docx"})
 
 # ============================================================================
-# 152-FZ COMPLIANCE CHECK
+# 152-FZ COMPLIANCE CHECK (УЛУЧШЕННЫЙ ПАРСЕР)
 # ============================================================================
 import requests
 from bs4 import BeautifulSoup
 import re
+from urllib.parse import urljoin, urlparse
 
 @app.get("/api/v1/compliance/check")
 def check_website_compliance(
@@ -414,209 +415,207 @@ def check_website_compliance(
     current_user: models.User = Depends(get_current_user)
 ):
     """
-    Проверяет сайт на соответствие 152-ФЗ
+    Умная проверка сайта на соответствие 152-ФЗ с глубоким сканированием
     """
     if not website_url:
         raise HTTPException(status_code=400, detail="URL сайта не указан")
     
-    # Добавляем https:// если нет
+    # Нормализация URL
     if not website_url.startswith(('http://', 'https://')):
         website_url = 'https://' + website_url
     
     try:
-        # Делаем запрос к сайту
         headers = {
-            'User-Agent': 'Mozilla/5.0 (ComplianceBox/1.0; 152-FZ Checker)'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         }
-        response = requests.get(website_url, headers=headers, timeout=10)
+        
+        # 1. Проверка главной страницы
+        response = requests.get(website_url, headers=headers, timeout=10, allow_redirects=True)
         response.raise_for_status()
         
-        soup = BeautifulSoup(response.text, 'html.parser')
-        html_text = response.text.lower()
+        final_url = response.url
+        is_https = final_url.startswith('https://')
         
-        # Список проверок
+        # Ограничиваем размер текста для парсинга (первые 500КБ)
+        html_content = response.text[:500000]
+        soup = BeautifulSoup(html_content, 'html.parser')
+        html_text = html_content.lower()
+        
         checks = {
+            "https_enabled": {
+                "name": "Использование защищенного соединения (HTTPS)",
+                "required": True,
+                "found": is_https,
+                "details": ["HTTPS активен" if is_https else "Сайт не использует HTTPS"]
+            },
             "privacy_policy": {
-                "name": "Политика конфиденциальности / Политика обработки ПДн",
+                "name": "Политика обработки персональных данных",
                 "required": True,
                 "found": False,
                 "details": []
             },
             "cookie_consent": {
-                "name": "Согласие на использование cookies",
+                "name": "Уведомление о использовании Cookies",
                 "required": True,
                 "found": False,
                 "details": []
             },
-            "personal_data_consent": {
-                "name": "Форма согласия на обработку персональных данных",
+            "consent_forms": {
+                "name": "Формы сбора данных с согласием",
                 "required": True,
                 "found": False,
                 "details": []
             },
-            "operator_info": {
-                "name": "Информация об операторе персональных данных",
+            "operator_details": {
+                "name": "Реквизиты оператора (Наименование, ИНН/ОГРН)",
                 "required": True,
                 "found": False,
                 "details": []
             },
             "contact_info": {
-                "name": "Контактная информация",
+                "name": "Контактная информация для субъектов ПДн",
                 "required": True,
                 "found": False,
                 "details": []
             },
-            "data_processing_purpose": {
+            "processing_purposes": {
                 "name": "Цели обработки персональных данных",
-                "required": False,
+                "required": True,
                 "found": False,
                 "details": []
             },
-            "data_retention": {
+            "retention_period": {
                 "name": "Сроки хранения персональных данных",
-                "required": False,
+                "required": True,
                 "found": False,
                 "details": []
             },
-            "third_party_disclosure": {
-                "name": "Информация о передаче данных третьим лицам",
+            "third_party_transfer": {
+                "name": "Условия передачи данных третьим лицам",
                 "required": False,
                 "found": False,
                 "details": []
             }
         }
+
+        # --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ: Поиск ссылки на политику ---
+        def find_policy_link(soup_obj, base_url):
+            policy_keywords = ['политик', 'персональн', 'privacy', 'confidential', '152-фз', 'пдн']
+            links = soup_obj.find_all('a', href=True)
+            for link in links:
+                link_text = link.get_text(strip=True).lower()
+                link_href = link['href'].lower()
+                # Проверяем и текст ссылки, и сам URL
+                if any(kw in link_text or kw in link_href for kw in policy_keywords):
+                    # Игнорируем якорные ссылки на самой странице, если это не единственный вариант
+                    if not link_href.startswith('#'):
+                        return urljoin(base_url, link['href'])
+            return None
+
+        # --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ: Анализ текста на наличие требований ---
+        def analyze_policy_text(text, checks_dict):
+            # Цели
+            if re.search(r'(цель|цели).{0,30}(обработк|сбор|использован)', text, re.IGNORECASE):
+                checks_dict["processing_purposes"]["found"] = True
+                checks_dict["processing_purposes"]["details"].append("Найдено упоминание целей обработки")
+            
+            # Сроки
+            if re.search(r'(срок|период|хранени|уничтожен).{0,30}(данных|информации)', text, re.IGNORECASE):
+                checks_dict["retention_period"]["found"] = True
+                checks_dict["retention_period"]["details"].append("Найдено упоминание сроков хранения")
+            
+            # Оператор
+            if re.search(r'(инн|огрн|юридическ.*адрес|наименование)', text, re.IGNORECASE):
+                checks_dict["operator_details"]["found"] = True
+                checks_dict["operator_details"]["details"].append("Найдены реквизиты оператора")
+            
+            # Третьи лица
+            if re.search(r'(третьим лицам|передач|распространен|предоставлен)', text, re.IGNORECASE):
+                checks_dict["third_party_transfer"]["found"] = True
+                checks_dict["third_party_transfer"]["details"].append("Найдено упоминание передачи данных")
+
+        # 2. Анализ главной страницы
+        # Cookies
+        if re.search(r'(cookie|куки|файл.*данных)', html_text):
+            checks["cookie_consent"]["found"] = True
+            checks["cookie_consent"]["details"].append("Найдено упоминание cookies")
         
-        # Проверка 1: Политика конфиденциальности
-        privacy_keywords = [
-            'политика конфиденциальности',
-            'политика обработки персональных данных',
-            'privacy policy',
-            'персональные данные',
-            '152-фз'
-        ]
-        for keyword in privacy_keywords:
-            if keyword in html_text:
+        # Контакты
+        if re.search(r'(email|e-mail|телефон|контакт|обратн.*связь)', html_text):
+            checks["contact_info"]["found"] = True
+            checks["contact_info"]["details"].append("Найдены контактные данные")
+
+        # Формы с чекбоксами
+        forms = soup.find_all('form')
+        for form in forms:
+            inputs = form.find_all('input')
+            has_text_input = any(i.get('type') in ['text', 'email', 'tel', 'password'] for i in inputs)
+            has_checkbox = any(i.get('type') == 'checkbox' for i in inputs)
+            
+            if has_text_input:
+                if has_checkbox:
+                    checks["consent_forms"]["found"] = True
+                    checks["consent_forms"]["details"].append("Найдена форма с чекбоксом согласия")
+                else:
+                    # Проверяем, есть ли рядом текст про согласие
+                    form_text = form.get_text().lower()
+                    if 'соглас' in form_text or 'политик' in form_text:
+                        checks["consent_forms"]["found"] = True
+                        checks["consent_forms"]["details"].append("Найдена форма с текстовым согласием")
+
+        # 3. ГЛУБОКИЙ СКАН: Ищем и проверяем страницу Политики
+        policy_url = find_policy_link(soup, final_url)
+        
+        if policy_url:
+            checks["privacy_policy"]["found"] = True
+            checks["privacy_policy"]["details"].append(f"Найдена ссылка на политику: {policy_url}")
+            
+            # Пытаемся загрузить страницу политики для глубокого анализа
+            try:
+                policy_response = requests.get(policy_url, headers=headers, timeout=10, allow_redirects=True)
+                if policy_response.ok:
+                    policy_soup = BeautifulSoup(policy_response.text[:500000], 'html.parser')
+                    policy_text = policy_soup.get_text(separator=' ', strip=True).lower()
+                    
+                    # Запускаем анализ содержания политики
+                    analyze_policy_text(policy_text, checks)
+                else:
+                    checks["privacy_policy"]["details"].append(f"Страница политики недоступна (код {policy_response.status_code})")
+            except requests.exceptions.RequestException:
+                checks["privacy_policy"]["details"].append("Не удалось загрузить страницу политики для глубокого анализа")
+        else:
+            # Если ссылку не нашли, ищем ключевые слова на главной (как запасной вариант)
+            if re.search(r'(политик.*конфиденциальност|политик.*обработк.*персональн.*данных)', html_text):
                 checks["privacy_policy"]["found"] = True
-                checks["privacy_policy"]["details"].append(f"Найдено упоминание: {keyword}")
+                checks["privacy_policy"]["details"].append("Текст политики найден на главной странице")
+                analyze_policy_text(html_text, checks)
+
+        # Подсчитываем результаты только по ОБЯЗАТЕЛЬным (required=True) пунктам
+        required_checks = {k: v for k, v in checks.items() if v["required"]}
+        total_required = len(required_checks)
+        passed_required = sum(1 for v in required_checks.values() if v["found"])
         
-        # Ищем ссылки на политику
-        links = soup.find_all('a', href=True)
-        for link in links:
-            link_text = link.get_text().lower()
-            link_href = link['href'].lower()
-            if any(kw in link_text or kw in link_href for kw in privacy_keywords):
-                checks["privacy_policy"]["details"].append(f"Ссылка: {link['href']}")
-        
-        # Проверка 2: Cookie consent
-        cookie_keywords = [
-            'cookie',
-            'куки',
-            'использование файлов cookie',
-            'согласие на обработку cookie',
-            'мы используем cookie'
-        ]
-        for keyword in cookie_keywords:
-            if keyword in html_text:
-                checks["cookie_consent"]["found"] = True
-                checks["cookie_consent"]["details"].append(f"Найдено: {keyword}")
-        
-        # Проверка 3: Согласие на обработку ПДн
-        consent_keywords = [
-            'согласие на обработку персональных данных',
-            'даю согласие',
-            'нажимая кнопку',
-            'отправляя форму',
-            'я согласен',
-            'checkbox'
-        ]
-        for keyword in consent_keywords:
-            if keyword in html_text:
-                checks["personal_data_consent"]["found"] = True
-                checks["personal_data_consent"]["details"].append(f"Найдено: {keyword}")
-        
-        # Ищем чекбоксы в формах
-        checkboxes = soup.find_all('input', type='checkbox')
-        if checkboxes:
-            checks["personal_data_consent"]["found"] = True
-            checks["personal_data_consent"]["details"].append(f"Найдено чекбоксов: {len(checkboxes)}")
-        
-        # Проверка 4: Информация об операторе
-        operator_keywords = [
-            'оператор персональных данных',
-            'инн',
-            'огрн',
-            'юридический адрес',
-            'наименование организации'
-        ]
-        for keyword in operator_keywords:
-            if keyword in html_text:
-                checks["operator_info"]["found"] = True
-                checks["operator_info"]["details"].append(f"Найдено: {keyword}")
-        
-        # Проверка 5: Контактная информация
-        contact_keywords = [
-            'контакты',
-            'email',
-            'телефон',
-            'адрес',
-            'обратная связь'
-        ]
-        for keyword in contact_keywords:
-            if keyword in html_text:
-                checks["contact_info"]["found"] = True
-                checks["contact_info"]["details"].append(f"Найдено: {keyword}")
-        
-        # Проверка 6: Цели обработки
-        purpose_keywords = [
-            'цель обработки',
-            'для чего собираем',
-            'используем для',
-            'цели сбора'
-        ]
-        for keyword in purpose_keywords:
-            if keyword in html_text:
-                checks["data_processing_purpose"]["found"] = True
-                checks["data_processing_purpose"]["details"].append(f"Найдено: {keyword}")
-        
-        # Проверка 7: Сроки хранения
-        retention_keywords = [
-            'срок хранения',
-            'хранятся в течение',
-            'период хранения',
-            'уничтожение данных'
-        ]
-        for keyword in retention_keywords:
-            if keyword in html_text:
-                checks["data_retention"]["found"] = True
-                checks["data_retention"]["details"].append(f"Найдено: {keyword}")
-        
-        # Проверка 8: Передача третьим лицам
-        third_party_keywords = [
-            'передача третьим лицам',
-            'распространение',
-            'предоставление данным',
-            'совместное использование'
-        ]
-        for keyword in third_party_keywords:
-            if keyword in html_text:
-                checks["third_party_disclosure"]["found"] = True
-                checks["third_party_disclosure"]["details"].append(f"Найдено: {keyword}")
-        
-        # Подсчитываем результаты
-        total_checks = len([c for c in checks.values() if c["required"]])
-        passed_checks = len([c for c in checks.values() if c["required"] and c["found"]])
-        compliance_percentage = round((passed_checks / total_checks) * 100) if total_checks > 0 else 0
+        compliance_percentage = round((passed_required / total_required) * 100) if total_required > 0 else 0
         
         return {
-            "url": website_url,
-            "checked_at": datetime.now().isoformat(),
+            "url": final_url,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
             "compliance_percentage": compliance_percentage,
-            "total_required": total_checks,
-            "passed_required": passed_checks,
+            "total_required": total_required,
+            "passed_required": passed_required,
             "checks": checks
         }
         
+    except requests.exceptions.SSLError:
+        raise HTTPException(status_code=400, detail="Ошибка SSL-сертификата сайта. Возможно, сайт небезопасен.")
+    except requests.exceptions.ConnectionError:
+        raise HTTPException(status_code=400, detail="Не удалось установить соединение с сайтом. Проверьте URL.")
+    except requests.exceptions.Timeout:
+        raise HTTPException(status_code=408, detail="Превышено время ожидания ответа от сайта.")
     except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=400, detail=f"Не удалось получить доступ к сайту: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Ошибка при запросе к сайту: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при проверке: {str(e)}")
+        import traceback
+        print("COMPLIANCE CHECK ERROR:\n", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Внутренняя ошибка при проверке: {str(e)}")
