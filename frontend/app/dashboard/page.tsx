@@ -32,7 +32,6 @@ export default function DashboardPage() {
           return;
         }
 
-        // Получаем данные пользователя
         const userRes = await fetch('https://compliance-box-backend.onrender.com/api/v1/auth/me', {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -48,7 +47,6 @@ export default function DashboardPage() {
         const userData = await userRes.json();
         setUser(userData);
 
-        // Получаем список компаний
         const tenantsRes = await fetch('https://compliance-box-backend.onrender.com/api/v1/tenants/', {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -108,10 +106,7 @@ export default function DashboardPage() {
       background: '#f5f5f5',
       padding: '2rem',
     }}>
-      <div style={{
-        maxWidth: '900px',
-        margin: '0 auto',
-      }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto' }}>
         {/* Шапка */}
         <div style={{
           display: 'flex',
@@ -124,17 +119,10 @@ export default function DashboardPage() {
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
         }}>
           <div>
-            <h1 style={{
-              margin: 0,
-              fontSize: '1.75rem',
-              color: '#333',
-            }}>
+            <h1 style={{ margin: 0, fontSize: '1.75rem', color: '#333' }}>
               Личный кабинет
             </h1>
-            <p style={{
-              margin: '0.5rem 0 0',
-              color: '#666',
-            }}>
+            <p style={{ margin: '0.5rem 0 0', color: '#666' }}>
               {user?.email}
             </p>
           </div>
@@ -151,7 +139,7 @@ export default function DashboardPage() {
                 fontWeight: 'bold',
               }}
             >
-              🔍 Проверка сайта
+               Проверка сайта
             </button>
             <button
               onClick={handleLogout}
@@ -183,11 +171,7 @@ export default function DashboardPage() {
             alignItems: 'center',
             marginBottom: '1.5rem',
           }}>
-            <h2 style={{
-              margin: 0,
-              fontSize: '1.5rem',
-              color: '#333',
-            }}>
+            <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#333' }}>
               Мои компании
             </h2>
             <button
@@ -244,10 +228,7 @@ export default function DashboardPage() {
               </button>
             </div>
           ) : (
-            <div style={{
-              display: 'grid',
-              gap: '1rem',
-            }}>
+            <div style={{ display: 'grid', gap: '1rem' }}>
               {tenants.map((tenant) => (
                 <div
                   key={tenant.id}
@@ -258,7 +239,7 @@ export default function DashboardPage() {
                     cursor: 'pointer',
                     transition: 'box-shadow 0.3s',
                   }}
-                  onClick={() => }router.push(`/dashboard/documents?tenantId=${tenant.id}`)
+                  onClick={() => router.push(`/documents?tenantId=${tenant.id}`)}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
                   }}
@@ -272,32 +253,19 @@ export default function DashboardPage() {
                     alignItems: 'flex-start',
                   }}>
                     <div style={{ flex: 1 }}>
-                      <h3 style={{
-                        margin: '0 0 0.5rem',
-                        fontSize: '1.25rem',
-                        color: '#333',
-                      }}>
+                      <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', color: '#333' }}>
                         {tenant.name}
                       </h3>
-                      <p style={{
-                        margin: '0.25rem 0',
-                        color: '#666',
-                      }}>
+                      <p style={{ margin: '0.25rem 0', color: '#666' }}>
                         <strong>ИНН:</strong> {tenant.inn}
                       </p>
                       {tenant.email && (
-                        <p style={{
-                          margin: '0.25rem 0',
-                          color: '#666',
-                        }}>
+                        <p style={{ margin: '0.25rem 0', color: '#666' }}>
                           <strong>Email:</strong> {tenant.email}
                         </p>
                       )}
                       {tenant.website && (
-                        <p style={{
-                          margin: '0.25rem 0',
-                          color: '#666',
-                        }}>
+                        <p style={{ margin: '0.25rem 0', color: '#666' }}>
                           <strong>Сайт:</strong>{' '}
                           <a
                             href={tenant.website}
