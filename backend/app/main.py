@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func
+from sqlalchemy import text
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 
@@ -32,6 +32,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 # ============================================================================
 # APP INIT
 # ============================================================================
+# Эта команда создаст таблицу pd_subjects при перезапуске сервиса на Render!
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Compliance Box API")
@@ -171,27 +172,12 @@ def read_tenants(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    # БЕЗОПАСНАЯ ВЕРСИЯ: не запрашиваем PdSubject, чтобы избежать 500 ошибки, 
+    # пока таблица не создана. Pydantic сам подставит pd_subjects_count = 0.
     tenants = db.query(models.Tenant).filter(
         models.Tenant.user_id == current_user.id
     ).offset(skip).limit(limit).all()
-    
-    # Добавляем подсчет записей реестра для отображения лимитов в интерфейсе
-    result = []
-    for t in tenants:
-        count = db.query(models.PdSubject).filter(
-            models.PdSubject.tenant_id == t.id,
-            models.PdSubject.user_id == current_user.id
-        ).count()
-        
-        tenant_dict = {
-            "id": t.id, "name": t.name, "inn": t.inn, "email": t.email,
-            "kpp": t.kpp, "address": t.address, "phone": t.phone,
-            "director_name": t.director_name, "website": t.website,
-            "created_at": t.created_at, "pd_subjects_count": count
-        }
-        result.append(tenant_dict)
-        
-    return result
+    return tenants
 
 @app.get("/api/v1/tenants/{tenant_id}", response_model=TenantResponse)
 def get_tenant(
@@ -249,7 +235,7 @@ def delete_tenant(
 # ============================================================================
 # PD SUBJECTS REGISTRY (РЕЕСТР СУБЪЕКТОВ ПДн)
 # ============================================================================
-FREE_TIER_LIMIT = 10  # Заглушка лимита для бесплатного тарифа
+FREE_TIER_LIMIT = 10  # Заглушка лимита для бесплатного тариф
 
 @app.get("/api/v1/pd-subjects/", response_model=List[PdSubjectResponse])
 def get_pd_subjects(
@@ -287,7 +273,6 @@ def create_pd_subject(
     if not tenant:
         raise HTTPException(status_code=404, detail="Компания не найдена или доступ запрещен")
 
-    # Проверка лимита бесплатного тарифа
     current_count = db.query(models.PdSubject).filter(
         models.PdSubject.tenant_id == tenant_id,
         models.PdSubject.user_id == current_user.id
@@ -559,9 +544,6 @@ def check_website_compliance(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    """
-    Умная проверка сайта на соответствие 152-ФЗ с глубоким сканированием
-    """
     if not website_url:
         raise HTTPException(status_code=400, detail="URL сайта не указан")
     
@@ -585,60 +567,15 @@ def check_website_compliance(
         html_text = html_content.lower()
         
         checks = {
-            "https_enabled": {
-                "name": "Использование защищенного соединения (HTTPS)",
-                "required": True,
-                "found": is_https,
-                "details": ["HTTPS активен" if is_https else "Сайт не использует HTTPS"]
-            },
-            "privacy_policy": {
-                "name": "Политика обработки персональных данных",
-                "required": True,
-                "found": False,
-                "details": []
-            },
-            "cookie_consent": {
-                "name": "Уведомление о использовании Cookies",
-                "required": True,
-                "found": False,
-                "details": []
-            },
-            "consent_forms": {
-                "name": "Формы сбора данных с согласием",
-                "required": True,
-                "found": False,
-                "details": []
-            },
-            "operator_details": {
-                "name": "Реквизиты оператора (Наименование, ИНН/ОГРН)",
-                "required": True,
-                "found": False,
-                "details": []
-            },
-            "contact_info": {
-                "name": "Контактная информация для субъектов ПДн",
-                "required": True,
-                "found": False,
-                "details": []
-            },
-            "processing_purposes": {
-                "name": "Цели обработки персональных данных",
-                "required": True,
-                "found": False,
-                "details": []
-            },
-            "retention_period": {
-                "name": "Сроки хранения персональных данных",
-                "required": True,
-                "found": False,
-                "details": []
-            },
-            "third_party_transfer": {
-                "name": "Условия передачи данных третьим лицам",
-                "required": False,
-                "found": False,
-                "details": []
-            }
+            "https_enabled": {"name": "Использование защищенного соединения (HTTPS)", "required": True, "found": is_https, "details": ["HTTPS активен" if is_https else "Сайт не использует HTTPS"]},
+            "privacy_policy": {"name": "Политика обработки персональных данных", "required": True, "found": False, "details": []},
+            "cookie_consent": {"name": "Уведомление о использовании Cookies", "required": True, "found": False, "details": []},
+            "consent_forms": {"name": "Формы сбора данных с согласием", "required": True, "found": False, "details": []},
+            "operator_details": {"name": "Реквизиты оператора (Наименование, ИНН/ОГРН)", "required": True, "found": False, "details": []},
+            "contact_info": {"name": "Контактная информация для субъектов ПДн", "required": True, "found": False, "details": []},
+            "processing_purposes": {"name": "Цели обработки персональных данных", "required": True, "found": False, "details": []},
+            "retention_period": {"name": "Сроки хранения персональных данных", "required": True, "found": False, "details": []},
+            "third_party_transfer": {"name": "Условия передачи данных третьим лицам", "required": False, "found": False, "details": []}
         }
 
         def find_policy_link(soup_obj, base_url):
@@ -656,15 +593,12 @@ def check_website_compliance(
             if re.search(r'(цель|цели).{0,30}(обработк|сбор|использован)', text, re.IGNORECASE):
                 checks_dict["processing_purposes"]["found"] = True
                 checks_dict["processing_purposes"]["details"].append("Найдено упоминание целей обработки")
-            
             if re.search(r'(срок|период|хранени|уничтожен).{0,30}(данных|информации)', text, re.IGNORECASE):
                 checks_dict["retention_period"]["found"] = True
                 checks_dict["retention_period"]["details"].append("Найдено упоминание сроков хранения")
-            
             if re.search(r'(инн|огрн|юридическ.*адрес|наименование)', text, re.IGNORECASE):
                 checks_dict["operator_details"]["found"] = True
                 checks_dict["operator_details"]["details"].append("Найдены реквизиты оператора")
-            
             if re.search(r'(третьим лицам|передач|распространен|предоставлен)', text, re.IGNORECASE):
                 checks_dict["third_party_transfer"]["found"] = True
                 checks_dict["third_party_transfer"]["details"].append("Найдено упоминание передачи данных")
@@ -682,7 +616,6 @@ def check_website_compliance(
             inputs = form.find_all('input')
             has_text_input = any(i.get('type') in ['text', 'email', 'tel', 'password'] for i in inputs)
             has_checkbox = any(i.get('type') == 'checkbox' for i in inputs)
-            
             if has_text_input:
                 if has_checkbox:
                     checks["consent_forms"]["found"] = True
@@ -694,11 +627,9 @@ def check_website_compliance(
                         checks["consent_forms"]["details"].append("Найдена форма с текстовым согласием")
 
         policy_url = find_policy_link(soup, final_url)
-        
         if policy_url:
             checks["privacy_policy"]["found"] = True
             checks["privacy_policy"]["details"].append(f"Найдена ссылка на политику: {policy_url}")
-            
             try:
                 policy_response = requests.get(policy_url, headers=headers, timeout=10, allow_redirects=True)
                 if policy_response.ok:
@@ -718,7 +649,6 @@ def check_website_compliance(
         required_checks = {k: v for k, v in checks.items() if v["required"]}
         total_required = len(required_checks)
         passed_required = sum(1 for v in required_checks.values() if v["found"])
-        
         compliance_percentage = round((passed_required / total_required) * 100) if total_required > 0 else 0
         
         return {
@@ -729,11 +659,10 @@ def check_website_compliance(
             "passed_required": passed_required,
             "checks": checks
         }
-        
     except requests.exceptions.SSLError:
-        raise HTTPException(status_code=400, detail="Ошибка SSL-сертификата сайта. Возможно, сайт небезопасен.")
+        raise HTTPException(status_code=400, detail="Ошибка SSL-сертификата сайта.")
     except requests.exceptions.ConnectionError:
-        raise HTTPException(status_code=400, detail="Не удалось установить соединение с сайтом. Проверьте URL.")
+        raise HTTPException(status_code=400, detail="Не удалось установить соединение с сайтом.")
     except requests.exceptions.Timeout:
         raise HTTPException(status_code=408, detail="Превышено время ожидания ответа от сайта.")
     except requests.exceptions.RequestException as e:
