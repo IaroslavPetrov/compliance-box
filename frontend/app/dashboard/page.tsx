@@ -80,6 +80,14 @@ export default function DashboardPage() {
     router.push('/dashboard/tenants/new');
   };
 
+  const handleCheckWebsite = (websiteUrl?: string) => {
+    if (websiteUrl) {
+      router.push(`/dashboard/compliance-check?url=${encodeURIComponent(websiteUrl)}`);
+    } else {
+      router.push('/dashboard/compliance-check');
+    }
+  };
+
   if (loading) {
     return (
       <div style={{
@@ -130,20 +138,36 @@ export default function DashboardPage() {
               {user?.email}
             </p>
           </div>
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: '0.75rem 1.5rem',
-              background: '#dc3545',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-            }}
-          >
-            Выйти
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button
+              onClick={() => handleCheckWebsite()}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: '#667eea',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+              }}
+            >
+              🔍 Проверка сайта
+            </button>
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+              }}
+            >
+              Выйти
+            </button>
+          </div>
         </div>
 
         {/* Список компаний */}
@@ -242,51 +266,80 @@ export default function DashboardPage() {
                     e.currentTarget.style.boxShadow = 'none';
                   }}
                 >
-                  <h3 style={{
-                    margin: '0 0 0.5rem',
-                    fontSize: '1.25rem',
-                    color: '#333',
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
                   }}>
-                    {tenant.name}
-                  </h3>
-                  <p style={{
-                    margin: '0.25rem 0',
-                    color: '#666',
-                  }}>
-                    <strong>ИНН:</strong> {tenant.inn}
-                  </p>
-                  {tenant.email && (
-                    <p style={{
-                      margin: '0.25rem 0',
-                      color: '#666',
-                    }}>
-                      <strong>Email:</strong> {tenant.email}
-                    </p>
-                  )}
-                  {tenant.website && (
-                    <p style={{
-                      margin: '0.25rem 0',
-                      color: '#666',
-                    }}>
-                      <strong>Сайт:</strong>{' '}
-                      <a
-                        href={tenant.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: '#667eea' }}
-                        onClick={(e) => e.stopPropagation()}
+                    <div style={{ flex: 1 }}>
+                      <h3 style={{
+                        margin: '0 0 0.5rem',
+                        fontSize: '1.25rem',
+                        color: '#333',
+                      }}>
+                        {tenant.name}
+                      </h3>
+                      <p style={{
+                        margin: '0.25rem 0',
+                        color: '#666',
+                      }}>
+                        <strong>ИНН:</strong> {tenant.inn}
+                      </p>
+                      {tenant.email && (
+                        <p style={{
+                          margin: '0.25rem 0',
+                          color: '#666',
+                        }}>
+                          <strong>Email:</strong> {tenant.email}
+                        </p>
+                      )}
+                      {tenant.website && (
+                        <p style={{
+                          margin: '0.25rem 0',
+                          color: '#666',
+                        }}>
+                          <strong>Сайт:</strong>{' '}
+                          <a
+                            href={tenant.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: '#667eea' }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {tenant.website}
+                          </a>
+                        </p>
+                      )}
+                      <p style={{
+                        margin: '0.5rem 0 0',
+                        fontSize: '0.875rem',
+                        color: '#999',
+                      }}>
+                        Добавлена: {new Date(tenant.created_at).toLocaleDateString('ru-RU')}
+                      </p>
+                    </div>
+                    {tenant.website && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCheckWebsite(tenant.website);
+                        }}
+                        style={{
+                          padding: '0.5rem 1rem',
+                          background: '#17a2b8',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '0.875rem',
+                          marginLeft: '1rem',
+                        }}
                       >
-                        {tenant.website}
-                      </a>
-                    </p>
-                  )}
-                  <p style={{
-                    margin: '0.5rem 0 0',
-                    fontSize: '0.875rem',
-                    color: '#999',
-                  }}>
-                    Добавлена: {new Date(tenant.created_at).toLocaleDateString('ru-RU')}
-                  </p>
+                         Проверить
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

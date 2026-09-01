@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 interface ComplianceCheck {
   name: string;
@@ -34,6 +34,19 @@ export default function ComplianceCheckPage() {
   const [result, setResult] = useState<ComplianceResult | null>(null);
   const [error, setError] = useState('');
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    // Проверяем, есть ли параметр url в адресе
+    const urlParam = searchParams.get('url');
+    if (urlParam) {
+      setCustomUrl(urlParam);
+      // Автоматически запускаем проверку через 500мс
+      setTimeout(() => {
+        checkWebsite(urlParam);
+      }, 500);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchTenants = async () => {
@@ -62,17 +75,7 @@ export default function ComplianceCheckPage() {
     fetchTenants();
   }, [router]);
 
-  const handleCheck = async () => {
-    let urlToCheck = customUrl;
-
-    // Если выбрана компания, берём её сайт
-    if (selectedTenant) {
-      const tenant = tenants.find(t => t.id === selectedTenant);
-      if (tenant?.website) {
-        urlToCheck = tenant.website;
-      }
-    }
-
+  const checkWebsite = async (urlToCheck: string) => {
     if (!urlToCheck) {
       setError('Введите URL сайта или выберите компанию');
       return;
@@ -105,6 +108,25 @@ export default function ComplianceCheckPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCheck = async () => {
+    let urlToCheck = customUrl;
+
+    // Если выбрана компания, берём её сайт
+    if (selectedTenant) {
+      const tenant = tenants.find(t => t.id === selectedTenant);
+      if (tenant?.website) {
+        urlToCheck = tenant.website;
+      }
+    }
+
+    if (!urlToCheck) {
+      setError('Введите URL сайта или выберите компанию');
+      return;
+    }
+
+    await checkWebsite(urlToCheck);
   };
 
   const getScoreColor = (percentage: number) => {
@@ -183,7 +205,14 @@ export default function ComplianceCheckPage() {
             </label>
             <select
               value={selectedTenant || ''}
-              onChange={(e) => setSelectedTenant(Number(e.target.value))}
+              onChange={(e) => {
+                const tenantId = Number(e.target.value);
+                setSelectedTenant(tenantId);
+                const tenant = tenants.find(t => t.id === tenantId);
+                if (tenant?.website) {
+                  setCustomUrl(tenant.website);
+                }
+              }}
               style={{
                 width: '100%',
                 padding: '0.75rem',
@@ -341,7 +370,7 @@ export default function ComplianceCheckPage() {
                       fontSize: '1rem',
                       color: '#333',
                     }}>
-                      {check.found ? '✅' : (check.required ? '❌' : '⚠️')} {check.name}
+                      {check.found ? '✅' : (check.required ? '❌' : '️')} {check.name}
                     </h4>
                     <span style={{
                       padding: '0.25rem 0.75rem',
