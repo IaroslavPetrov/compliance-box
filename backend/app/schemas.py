@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 # ============================================================================
@@ -54,6 +54,7 @@ class TenantResponse(BaseModel):
     director_name: Optional[str] = None
     website: Optional[str] = None
     created_at: datetime
+    pd_subjects_count: Optional[int] = 0
 
     class Config:
         from_attributes = True
@@ -88,3 +89,31 @@ class DocumentHistoryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# ============================================================================
+# PD SUBJECT SCHEMAS (РЕЕСТР СУБЪЕКТОВ ПДн)
+# ============================================================================
+class PdSubjectCreate(BaseModel):
+    full_name: str
+    category: str
+    legal_basis: str
+    data_types: Optional[str] = None
+
+class PdSubjectResponse(BaseModel):
+    id: int
+    full_name: str
+    category: str
+    legal_basis: str
+    data_types: Optional[str] = None
+    created_at: datetime
+    tenant_id: int
+    user_id: int
+
+    class Config:
+        from_attributes = True
+
+class PdSubjectUpdate(BaseModel):
+    full_name: Optional[str] = None
+    category: Optional[str] = None
+    legal_basis: Optional[str] = None
+    data_types: Optional[str] = None

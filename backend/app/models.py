@@ -16,6 +16,7 @@ class User(Base):
 
     tenants = relationship("Tenant", back_populates="user")
     document_history = relationship("DocumentHistory", back_populates="user")
+    pd_subjects = relationship("PdSubject", back_populates="user")
 
 class Tenant(Base):
     __tablename__ = "tenants"
@@ -34,6 +35,7 @@ class Tenant(Base):
 
     user = relationship("User", back_populates="tenants")
     document_history = relationship("DocumentHistory", back_populates="tenant")
+    pd_subjects = relationship("PdSubject", back_populates="tenant")
 
 class DocumentHistory(Base):
     __tablename__ = "document_history"
@@ -48,3 +50,19 @@ class DocumentHistory(Base):
 
     user = relationship("User", back_populates="document_history")
     tenant = relationship("Tenant", back_populates="document_history")
+
+class PdSubject(Base):
+    __tablename__ = "pd_subjects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    full_name = Column(String)
+    category = Column(String)
+    legal_basis = Column(String)
+    data_types = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    tenant_id = Column(Integer, ForeignKey("tenants.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+
+    tenant = relationship("Tenant", back_populates="pd_subjects")
+    user = relationship("User", back_populates="pd_subjects")
