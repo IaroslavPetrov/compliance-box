@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, func
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 
@@ -11,7 +11,8 @@ from app import models
 from app.schemas import (
     UserCreate, UserLogin, UserResponse, Token, TokenData,
     TenantCreate, TenantResponse, TenantUpdate,
-    DocumentHistoryCreate, DocumentHistoryResponse
+    DocumentHistoryCreate, DocumentHistoryResponse,
+    PdSubjectCreate, PdSubjectResponse, PdSubjectUpdate
 )
 from app.services.document_generator import document_generator
 
@@ -173,7 +174,24 @@ def read_tenants(
     tenants = db.query(models.Tenant).filter(
         models.Tenant.user_id == current_user.id
     ).offset(skip).limit(limit).all()
-    return tenants
+    
+    # Добавляем подсчет записей реестра для отображения лимитов в интерфейсе
+    result = []
+    for t in tenants:
+        count = db.query(models.PdSubject).filter(
+            models.PdSubject.tenant_id == t.id,
+            models.PdSubject.user_id == current_user.id
+        ).count()
+        
+        tenant_dict = {
+            "id": t.id, "name": t.name, "inn": t.inn, "email": t.email,
+            "kpp": t.kpp, "address": t.address, "phone": t.phone,
+            "director_name": t.director_name, "website": t.website,
+            "created_at": t.created_at, "pd_subjects_count": count
+        }
+        result.append(tenant_dict)
+        
+    return result
 
 @app.get("/api/v1/tenants/{tenant_id}", response_model=TenantResponse)
 def get_tenant(
@@ -227,6 +245,133 @@ def delete_tenant(
     db.delete(db_tenant)
     db.commit()
     return {"message": "Компания удалена"}
+
+# ============================================================================
+# PD SUBJECTS REGISTRY (РЕЕСТР СУБЪЕКТОВ ПДн)
+# ============================================================================
+FREE_TIER_LIMIT = 10  # Заглушка лимита для бесплатного тарифа
+
+@app.get("/api/v1/pd-subjects/", response_model=List[PdSubjectResponse])
+def get_pd_subjects(
+    tenant_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    tenant = db.query(models.Tenant).filter(
+        models.Tenant.id == tenant_id,
+        models.Tenant.user_id == current_user.id
+    ).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена или доступ запрещен")
+
+    subjects = db.query(models.PdSubject).filter(
+        models.PdSubject.tenant_id == tenant_id,
+        models.PdSubject.user_id == current_user.id
+    ).offset(skip).limit(limit).all()
+    
+    return subjects
+
+@app.post("/api/v1/pd-subjects/", response_model=PdSubjectResponse)
+def create_pd_subject(
+    tenant_id: int,
+    subject: PdSubjectCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    tenant = db.query(models.Tenant).filter(
+        models.Tenant.id == tenant_id,
+        models.Tenant.user_id == current_user.id
+    ).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена или доступ запрещен")
+
+    # Проверка лимита бесплатного тарифа
+    current_count = db.query(models.PdSubject).filter(
+        models.PdSubject.tenant_id == tenant_id,
+        models.PdSubject.user_id == current_user.id
+    ).count()
+
+    if current_count >= FREE_TIER_LIMIT:
+        raise HTTPException(
+            status_code=403, 
+            detail=f"Достигнут лимит записей реестра для бесплатного тарифа ({FREE_TIER_LIMIT}). Обновите тариф для снятия ограничений."
+        )
+
+    new_subject = models.PdSubject(
+        **subject.model_dump(),
+        tenant_id=tenant_id,
+        user_id=current_user.id
+    )
+    db.add(new_subject)
+    db.commit()
+    db.refresh(new_subject)
+    return new_subject
+
+@app.put("/api/v1/pd-subjects/{subject_id}", response_model=PdSubjectResponse)
+def update_pd_subject(
+    subject_id: int,
+    subject: PdSubjectUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    db_subject = db.query(models.PdSubject).filter(
+        models.PdSubject.id == subject_id,
+        models.PdSubject.user_id == current_user.id
+    ).first()
+    if not db_subject:
+        raise HTTPException(status_code=404, detail="Запись не найдена или доступ запрещен")
+
+    update_data = subject.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_subject, field, value)
+
+    db.commit()
+    db.refresh(db_subject)
+    return db_subject
+
+@app.delete("/api/v1/pd-subjects/{subject_id}")
+def delete_pd_subject(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    db_subject = db.query(models.PdSubject).filter(
+        models.PdSubject.id == subject_id,
+        models.PdSubject.user_id == current_user.id
+    ).first()
+    if not db_subject:
+        raise HTTPException(status_code=404, detail="Запись не найдена или доступ запрещен")
+
+    db.delete(db_subject)
+    db.commit()
+    return {"message": "Запись из реестра удалена"}
+
+@app.get("/api/v1/pd-subjects/limits")
+def get_pd_subjects_limits(
+    tenant_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    tenant = db.query(models.Tenant).filter(
+        models.Tenant.id == tenant_id,
+        models.Tenant.user_id == current_user.id
+    ).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+
+    current_count = db.query(models.PdSubject).filter(
+        models.PdSubject.tenant_id == tenant_id,
+        models.PdSubject.user_id == current_user.id
+    ).count()
+
+    return {
+        "current": current_count,
+        "limit": FREE_TIER_LIMIT,
+        "tariff": "Free",
+        "is_limit_reached": current_count >= FREE_TIER_LIMIT
+    }
 
 # ============================================================================
 # DOCUMENT HISTORY
@@ -420,7 +565,6 @@ def check_website_compliance(
     if not website_url:
         raise HTTPException(status_code=400, detail="URL сайта не указан")
     
-    # Нормализация URL
     if not website_url.startswith(('http://', 'https://')):
         website_url = 'https://' + website_url
     
@@ -430,14 +574,12 @@ def check_website_compliance(
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         }
         
-        # 1. Проверка главной страницы
         response = requests.get(website_url, headers=headers, timeout=10, allow_redirects=True)
         response.raise_for_status()
         
         final_url = response.url
         is_https = final_url.startswith('https://')
         
-        # Ограничиваем размер текста для парсинга (первые 500КБ)
         html_content = response.text[:500000]
         soup = BeautifulSoup(html_content, 'html.parser')
         html_text = html_content.lower()
@@ -499,54 +641,42 @@ def check_website_compliance(
             }
         }
 
-        # --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ: Поиск ссылки на политику ---
         def find_policy_link(soup_obj, base_url):
             policy_keywords = ['политик', 'персональн', 'privacy', 'confidential', '152-фз', 'пдн']
             links = soup_obj.find_all('a', href=True)
             for link in links:
                 link_text = link.get_text(strip=True).lower()
                 link_href = link['href'].lower()
-                # Проверяем и текст ссылки, и сам URL
                 if any(kw in link_text or kw in link_href for kw in policy_keywords):
-                    # Игнорируем якорные ссылки на самой странице, если это не единственный вариант
                     if not link_href.startswith('#'):
                         return urljoin(base_url, link['href'])
             return None
 
-        # --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ: Анализ текста на наличие требований ---
         def analyze_policy_text(text, checks_dict):
-            # Цели
             if re.search(r'(цель|цели).{0,30}(обработк|сбор|использован)', text, re.IGNORECASE):
                 checks_dict["processing_purposes"]["found"] = True
                 checks_dict["processing_purposes"]["details"].append("Найдено упоминание целей обработки")
             
-            # Сроки
             if re.search(r'(срок|период|хранени|уничтожен).{0,30}(данных|информации)', text, re.IGNORECASE):
                 checks_dict["retention_period"]["found"] = True
                 checks_dict["retention_period"]["details"].append("Найдено упоминание сроков хранения")
             
-            # Оператор
             if re.search(r'(инн|огрн|юридическ.*адрес|наименование)', text, re.IGNORECASE):
                 checks_dict["operator_details"]["found"] = True
                 checks_dict["operator_details"]["details"].append("Найдены реквизиты оператора")
             
-            # Третьи лица
             if re.search(r'(третьим лицам|передач|распространен|предоставлен)', text, re.IGNORECASE):
                 checks_dict["third_party_transfer"]["found"] = True
                 checks_dict["third_party_transfer"]["details"].append("Найдено упоминание передачи данных")
 
-        # 2. Анализ главной страницы
-        # Cookies
         if re.search(r'(cookie|куки|файл.*данных)', html_text):
             checks["cookie_consent"]["found"] = True
             checks["cookie_consent"]["details"].append("Найдено упоминание cookies")
         
-        # Контакты
         if re.search(r'(email|e-mail|телефон|контакт|обратн.*связь)', html_text):
             checks["contact_info"]["found"] = True
             checks["contact_info"]["details"].append("Найдены контактные данные")
 
-        # Формы с чекбоксами
         forms = soup.find_all('form')
         for form in forms:
             inputs = form.find_all('input')
@@ -558,40 +688,33 @@ def check_website_compliance(
                     checks["consent_forms"]["found"] = True
                     checks["consent_forms"]["details"].append("Найдена форма с чекбоксом согласия")
                 else:
-                    # Проверяем, есть ли рядом текст про согласие
                     form_text = form.get_text().lower()
                     if 'соглас' in form_text or 'политик' in form_text:
                         checks["consent_forms"]["found"] = True
                         checks["consent_forms"]["details"].append("Найдена форма с текстовым согласием")
 
-        # 3. ГЛУБОКИЙ СКАН: Ищем и проверяем страницу Политики
         policy_url = find_policy_link(soup, final_url)
         
         if policy_url:
             checks["privacy_policy"]["found"] = True
             checks["privacy_policy"]["details"].append(f"Найдена ссылка на политику: {policy_url}")
             
-            # Пытаемся загрузить страницу политики для глубокого анализа
             try:
                 policy_response = requests.get(policy_url, headers=headers, timeout=10, allow_redirects=True)
                 if policy_response.ok:
                     policy_soup = BeautifulSoup(policy_response.text[:500000], 'html.parser')
                     policy_text = policy_soup.get_text(separator=' ', strip=True).lower()
-                    
-                    # Запускаем анализ содержания политики
                     analyze_policy_text(policy_text, checks)
                 else:
                     checks["privacy_policy"]["details"].append(f"Страница политики недоступна (код {policy_response.status_code})")
             except requests.exceptions.RequestException:
                 checks["privacy_policy"]["details"].append("Не удалось загрузить страницу политики для глубокого анализа")
         else:
-            # Если ссылку не нашли, ищем ключевые слова на главной (как запасной вариант)
             if re.search(r'(политик.*конфиденциальност|политик.*обработк.*персональн.*данных)', html_text):
                 checks["privacy_policy"]["found"] = True
                 checks["privacy_policy"]["details"].append("Текст политики найден на главной странице")
                 analyze_policy_text(html_text, checks)
 
-        # Подсчитываем результаты только по ОБЯЗАТЕЛЬным (required=True) пунктам
         required_checks = {k: v for k, v in checks.items() if v["required"]}
         total_required = len(required_checks)
         passed_required = sum(1 for v in required_checks.values() if v["found"])
