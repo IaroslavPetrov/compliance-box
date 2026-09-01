@@ -258,7 +258,7 @@ export default function DashboardPage() {
                     cursor: 'pointer',
                     transition: 'box-shadow 0.3s',
                   }}
-                  onClick={() => router.push(`/documents?tenantId=${tenant.id}`)}
+                  onClick={() => }router.push(`/dashboard/documents?tenantId=${tenant.id}`)
                   onMouseEnter={(e) => {
                     e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
                   }}
