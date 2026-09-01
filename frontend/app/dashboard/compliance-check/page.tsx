@@ -127,9 +127,9 @@ export default function ComplianceCheckPage() {
   };
 
   const getScoreColor = (percentage: number) => {
-    if (percentage >= 80) return '#00C853'; // Зелёный (успех)
-    if (percentage >= 60) return '#FFC107'; // Жёлтый (предупреждение)
-    return '#FF4444'; // Красный (ошибка)
+    if (percentage >= 80) return '#00C853';
+    if (percentage >= 60) return '#FFC107';
+    return '#FF4444';
   };
 
   const inputStyle = {
@@ -403,6 +403,31 @@ export default function ComplianceCheckPage() {
                 );
               })}
             </div>
+
+            {/* Юридический дисклеймер */}
+            <div style={{
+              marginTop: '2rem',
+              padding: '1rem',
+              background: 'rgba(255, 193, 7, 0.1)',
+              border: '1px solid #FFC107',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '0.75rem',
+            }}>
+              <span style={{ fontSize: '1.25rem', flexShrink: 0 }}>⚠️</span>
+              <div>
+                <p style={{
+                  margin: 0,
+                  fontSize: '0.9rem',
+                  color: '#E0E0E0',
+                  lineHeight: 1.5,
+                }}>
+                  <strong style={{ color: '#FFC107' }}>Юридический дисклеймер:</strong> Результаты автоматической проверки носят исключительно информационный характер и не являются официальным юридическим заключением. Для получения юридически значимого аудита соответствия 152-ФЗ и минимизации рисков рекомендуем обратиться к профильным специалистам.
+                </p>
+              </div>
+            </div>
+
           </div>
         )}
       </div>
