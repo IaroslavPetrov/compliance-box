@@ -13,6 +13,7 @@ import {
   IconClose,
   IconLogout,
 } from '../../components/icons';
+import { useToast } from '../../contexts/ToastContext';
 
 interface Tenant {
   id: number;
@@ -29,18 +30,17 @@ interface Tenant {
 
 export default function DashboardPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const router = useRouter();
   const isMobile = useIsMobile();
+  const toast = useToast();
 
   // Состояния для редактирования
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<Tenant>>({});
   const [saving, setSaving] = useState(false);
-  const [editError, setEditError] = useState('');
 
   // Состояния для удаления
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
@@ -78,11 +78,11 @@ export default function DashboardPage() {
       const tenantsData = await tenantsRes.json();
       setTenants(tenantsData);
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [router, toast]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -117,7 +117,6 @@ export default function DashboardPage() {
       director_name: tenant.director_name || '',
       website: tenant.website || '',
     });
-    setEditError('');
     setShowEditModal(true);
   };
 
@@ -125,7 +124,6 @@ export default function DashboardPage() {
     setShowEditModal(false);
     setEditingTenant(null);
     setEditFormData({});
-    setEditError('');
   };
 
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,7 +135,6 @@ export default function DashboardPage() {
     if (!editingTenant) return;
 
     setSaving(true);
-    setEditError('');
 
     try {
       const token = localStorage.getItem('token');
@@ -158,10 +155,11 @@ export default function DashboardPage() {
         throw new Error(errData.detail || 'Ошибка при сохранении');
       }
 
+      toast.success('Изменения сохранены');
       await fetchDashboardData();
       closeEditModal();
     } catch (err: any) {
-      setEditError(err.message);
+      toast.error(err.message);
     } finally {
       setSaving(false);
     }
@@ -180,7 +178,6 @@ export default function DashboardPage() {
     if (!deleteConfirmId) return;
 
     setDeleting(true);
-    setError('');
 
     try {
       const token = localStorage.getItem('token');
@@ -197,10 +194,11 @@ export default function DashboardPage() {
         throw new Error(errData.detail || 'Ошибка при удалении');
       }
 
+      toast.success('Компания удалена');
       await fetchDashboardData();
       setDeleteConfirmId(null);
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message);
       setDeleteConfirmId(null);
     } finally {
       setDeleting(false);
@@ -376,20 +374,6 @@ export default function DashboardPage() {
               Добавить компанию
             </button>
           </div>
-
-          {error && (
-            <div style={{
-              padding: '1rem',
-              background: 'rgba(255, 68, 68, 0.1)',
-              border: '1px solid #FF4444',
-              borderRadius: '8px',
-              color: '#FF4444',
-              marginBottom: '1rem',
-              fontSize: '0.95rem',
-            }}>
-              {error}
-            </div>
-          )}
 
           {tenants.length === 0 ? (
             <div style={{
@@ -715,20 +699,6 @@ export default function DashboardPage() {
                 <IconClose />
               </button>
             </div>
-
-            {editError && (
-              <div style={{
-                padding: '0.75rem',
-                background: 'rgba(255, 68, 68, 0.1)',
-                border: '1px solid #FF4444',
-                borderRadius: '8px',
-                color: '#FF4444',
-                marginBottom: '1rem',
-                fontSize: '0.9rem',
-              }}>
-                {editError}
-              </div>
-            )}
 
             <div style={{ display: 'grid', gap: '1rem' }}>
               <div>
