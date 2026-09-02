@@ -143,3 +143,9 @@ export const IconLogout = (p: IconProps) => (
     <line x1="21" y1="12" x2="9" y2="12" />
   </Svg>
 );
+export const IconClock = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </Svg>
+);
