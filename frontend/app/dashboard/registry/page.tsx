@@ -12,6 +12,7 @@ import {
   IconClose,
   IconUsers,
 } from '../../../components/icons';
+import { useToast } from '../../../contexts/ToastContext';
 
 // ============================================================================
 // ИНТЕРФЕЙСЫ И СПРАВОЧНИКИ
@@ -56,11 +57,11 @@ export default function RegistryPage() {
   const searchParams = useSearchParams();
   const tenantId = searchParams.get('tenantId');
   const isMobile = useIsMobile();
+  const toast = useToast();
 
   const [subjects, setSubjects] = useState<PdSubject[]>([]);
   const [limits, setLimits] = useState<LimitsInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
   const [showModal, setShowModal] = useState(false);
   const [editingSubject, setEditingSubject] = useState<PdSubject | null>(null);
@@ -71,7 +72,6 @@ export default function RegistryPage() {
     data_types: '',
   });
   const [saving, setSaving] = useState(false);
-  const [modalError, setModalError] = useState('');
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -80,7 +80,6 @@ export default function RegistryPage() {
     if (!tenantId) return;
 
     setLoading(true);
-    setError('');
 
     try {
       const token = localStorage.getItem('token');
@@ -105,11 +104,11 @@ export default function RegistryPage() {
       setSubjects(await subjectsRes.json());
       setLimits(await limitsRes.json());
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
-  }, [tenantId, router]);
+  }, [tenantId, router, toast]);
 
   useEffect(() => {
     fetchData();
@@ -117,16 +116,12 @@ export default function RegistryPage() {
 
   const openAddModal = () => {
     if (limits?.is_limit_reached) {
-      setEditingSubject(null);
-      setFormData({ full_name: '', category: '', legal_basis: '', data_types: '' });
-      setModalError(`Достигнут лимит ${limits.limit} записей для тарифа ${limits.tariff}. Обновите тариф для снятия ограничений.`);
-      setShowModal(true);
+      toast.warning(`Достигнут лимит ${limits.limit} записей для тарифа ${limits.tariff}. Обновите тариф для снятия ограничений.`);
       return;
     }
 
     setEditingSubject(null);
     setFormData({ full_name: '', category: '', legal_basis: '', data_types: '' });
-    setModalError('');
     setShowModal(true);
   };
 
@@ -138,14 +133,12 @@ export default function RegistryPage() {
       legal_basis: subject.legal_basis,
       data_types: subject.data_types || '',
     });
-    setModalError('');
     setShowModal(true);
   };
 
   const closeModal = () => {
     setShowModal(false);
     setEditingSubject(null);
-    setModalError('');
   };
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -155,19 +148,18 @@ export default function RegistryPage() {
 
   const handleSave = async () => {
     if (limits?.is_limit_reached && !editingSubject) {
-      setModalError(`Достигнут лимит ${limits.limit} записей для тарифа ${limits.tariff}. Обновите тариф для снятия ограничений.`);
+      toast.warning(`Достигнут лимит ${limits.limit} записей для тарифа ${limits.tariff}. Обновите тариф для снятия ограничений.`);
       return;
     }
 
     if (!formData.full_name || !formData.category || !formData.legal_basis) {
-      setModalError('Заполните обязательные поля: ФИО, категория и основание обработки');
+      toast.warning('Заполните обязательные поля: ФИО, категория и основание обработки');
       return;
     }
 
     if (!tenantId) return;
 
     setSaving(true);
-    setModalError('');
 
     try {
       const token = localStorage.getItem('token');
@@ -192,10 +184,11 @@ export default function RegistryPage() {
         throw new Error(errData.detail || 'Ошибка при сохранении');
       }
 
+      toast.success(editingSubject ? 'Изменения сохранены' : 'Запись добавлена в реестр');
       await fetchData();
       closeModal();
     } catch (err: any) {
-      setModalError(err.message);
+      toast.error(err.message);
     } finally {
       setSaving(false);
     }
@@ -222,10 +215,11 @@ export default function RegistryPage() {
         throw new Error(errData.detail || 'Ошибка при удалении');
       }
 
+      toast.success('Запись удалена из реестра');
       await fetchData();
       setDeleteConfirmId(null);
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message);
       setDeleteConfirmId(null);
     } finally {
       setDeleting(false);
@@ -492,21 +486,6 @@ export default function RegistryPage() {
             Добавить субъекта
           </button>
         </div>
-
-        {error && (
-          <div style={{
-            padding: '1rem',
-            background: 'rgba(255, 68, 68, 0.1)',
-            border: '1px solid #FF4444',
-            borderRadius: '8px',
-            color: '#FF4444',
-            marginBottom: '1.5rem',
-            fontSize: '0.95rem',
-            lineHeight: 1.4,
-          }}>
-            {error}
-          </div>
-        )}
 
         {/* Таблица */}
         {subjects.length === 0 ? (
@@ -794,21 +773,6 @@ export default function RegistryPage() {
                 <IconClose />
               </button>
             </div>
-
-            {modalError && (
-              <div style={{
-                padding: '0.75rem',
-                background: 'rgba(255, 68, 68, 0.1)',
-                border: '1px solid #FF4444',
-                borderRadius: '8px',
-                color: '#FF4444',
-                marginBottom: '1rem',
-                fontSize: '0.9rem',
-                lineHeight: 1.4,
-              }}>
-                {modalError}
-              </div>
-            )}
 
             <div style={{ display: 'grid', gap: '1rem' }}>
               <div>
