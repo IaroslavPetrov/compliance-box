@@ -108,6 +108,7 @@ class PdSubjectResponse(BaseModel):
     created_at: datetime
     tenant_id: int
     user_id: int
+    data_system_ids: List[int] = []  # IDs связанных ИС
 
     class Config:
         from_attributes = True
@@ -117,3 +118,50 @@ class PdSubjectUpdate(BaseModel):
     category: Optional[str] = None
     legal_basis: Optional[str] = None
     data_types: Optional[str] = None
+
+# ============================================================================
+# DATA SYSTEM SCHEMAS (КАРТА ОБРАБОТКИ ПДн)
+# ============================================================================
+class DataSystemCreate(BaseModel):
+    name: str
+    system_type: str  # 'local' | 'cloud_saas' | 'file' | 'physical'
+    categories: List[str] = []  # ['employees', 'clients', ...]
+    data_location: Optional[str] = None
+    responsible_name: Optional[str] = None
+    responsible_position: Optional[str] = None
+    description: Optional[str] = None
+
+class DataSystemUpdate(BaseModel):
+    name: Optional[str] = None
+    system_type: Optional[str] = None
+    categories: Optional[List[str]] = None
+    data_location: Optional[str] = None
+    responsible_name: Optional[str] = None
+    responsible_position: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class DataSystemResponse(BaseModel):
+    id: int
+    name: str
+    system_type: str
+    categories: List[str] = []
+    data_location: Optional[str] = None
+    responsible_name: Optional[str] = None
+    responsible_position: Optional[str] = None
+    description: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    tenant_id: int
+    user_id: int
+    pd_subjects_count: int = 0  # Количество привязанных субъектов
+
+    class Config:
+        from_attributes = True
+
+class DataSystemLimitsResponse(BaseModel):
+    current: int
+    limit: int
+    tariff: str
+    is_limit_reached: bool

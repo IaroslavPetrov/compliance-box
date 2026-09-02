@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
+import json
 
 from app.database import engine, Base, get_db
 from app import models
@@ -12,7 +13,8 @@ from app.schemas import (
     UserCreate, UserLogin, UserResponse, Token, TokenData,
     TenantCreate, TenantResponse, TenantUpdate,
     DocumentHistoryCreate, DocumentHistoryResponse,
-    PdSubjectCreate, PdSubjectResponse, PdSubjectUpdate
+    PdSubjectCreate, PdSubjectResponse, PdSubjectUpdate,
+    DataSystemCreate, DataSystemUpdate, DataSystemResponse, DataSystemLimitsResponse,
 )
 from app.services.document_generator import document_generator
 
@@ -32,7 +34,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 # ============================================================================
 # APP INIT
 # ============================================================================
-# Создаём все таблицы
+# Создаём все таблицы (включая новые: data_systems, pd_subject_data_systems)
 Base.metadata.create_all(bind=engine)
 
 # Принудительно создаём таблицу pd_subjects, если её нет
@@ -251,6 +253,14 @@ def delete_tenant(
 # ============================================================================
 FREE_TIER_LIMIT = 10  # Заглушка лимита для бесплатного тарифа
 
+def _serialize_data_systems_to_response(subject):
+    """Вспомогательная функция: формирует DataSystemResponse с учётом JSON-категорий"""
+    try:
+        cats = json.loads(subject.categories) if subject.categories else []
+    except (json.JSONDecodeError, TypeError):
+        cats = []
+    return cats
+
 @app.get("/api/v1/pd-subjects/", response_model=List[PdSubjectResponse])
 def get_pd_subjects(
     tenant_id: int,
@@ -271,7 +281,21 @@ def get_pd_subjects(
         models.PdSubject.user_id == current_user.id
     ).offset(skip).limit(limit).all()
     
-    return subjects
+    result = []
+    for s in subjects:
+        data_system_ids = [ds.id for ds in s.data_systems]
+        result.append(PdSubjectResponse(
+            id=s.id,
+            full_name=s.full_name,
+            category=s.category,
+            legal_basis=s.legal_basis,
+            data_types=s.data_types,
+            created_at=s.created_at,
+            tenant_id=s.tenant_id,
+            user_id=s.user_id,
+            data_system_ids=data_system_ids,
+        ))
+    return result
 
 @app.post("/api/v1/pd-subjects/", response_model=PdSubjectResponse)
 def create_pd_subject(
@@ -306,7 +330,17 @@ def create_pd_subject(
     db.add(new_subject)
     db.commit()
     db.refresh(new_subject)
-    return new_subject
+    return PdSubjectResponse(
+        id=new_subject.id,
+        full_name=new_subject.full_name,
+        category=new_subject.category,
+        legal_basis=new_subject.legal_basis,
+        data_types=new_subject.data_types,
+        created_at=new_subject.created_at,
+        tenant_id=new_subject.tenant_id,
+        user_id=new_subject.user_id,
+        data_system_ids=[],
+    )
 
 @app.put("/api/v1/pd-subjects/{subject_id}", response_model=PdSubjectResponse)
 def update_pd_subject(
@@ -328,7 +362,18 @@ def update_pd_subject(
 
     db.commit()
     db.refresh(db_subject)
-    return db_subject
+    data_system_ids = [ds.id for ds in db_subject.data_systems]
+    return PdSubjectResponse(
+        id=db_subject.id,
+        full_name=db_subject.full_name,
+        category=db_subject.category,
+        legal_basis=db_subject.legal_basis,
+        data_types=db_subject.data_types,
+        created_at=db_subject.created_at,
+        tenant_id=db_subject.tenant_id,
+        user_id=db_subject.user_id,
+        data_system_ids=data_system_ids,
+    )
 
 @app.delete("/api/v1/pd-subjects/{subject_id}")
 def delete_pd_subject(
@@ -370,6 +415,249 @@ def get_pd_subjects_limits(
         "limit": FREE_TIER_LIMIT,
         "tariff": "Free",
         "is_limit_reached": current_count >= FREE_TIER_LIMIT
+    }
+
+# ============================================================================
+# DATA SYSTEMS (КАРТА ОБРАБОТКИ ПДн) — НОВАЯ СУЩНОСТЬ
+# ============================================================================
+DATA_SYSTEM_FREE_TIER_LIMIT = 1  # Free: 1 ИС (Starter=3, Pro=10, Business=25)
+
+def _data_system_to_response(ds: models.DataSystem) -> DataSystemResponse:
+    """Конвертирует ORM-модель DataSystem в Pydantic-ответ (десериализует JSON categories)."""
+    try:
+        cats = json.loads(ds.categories) if ds.categories else []
+    except (json.JSONDecodeError, TypeError):
+        cats = []
+    return DataSystemResponse(
+        id=ds.id,
+        name=ds.name,
+        system_type=ds.system_type,
+        categories=cats,
+        data_location=ds.data_location,
+        responsible_name=ds.responsible_name,
+        responsible_position=ds.responsible_position,
+        description=ds.description,
+        is_active=ds.is_active,
+        created_at=ds.created_at,
+        updated_at=ds.updated_at or ds.created_at,
+        tenant_id=ds.tenant_id,
+        user_id=ds.user_id,
+        pd_subjects_count=len(ds.pd_subjects) if ds.pd_subjects else 0,
+    )
+
+@app.get("/api/v1/data-systems/", response_model=List[DataSystemResponse])
+def get_data_systems(
+    tenant_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    tenant = db.query(models.Tenant).filter(
+        models.Tenant.id == tenant_id,
+        models.Tenant.user_id == current_user.id
+    ).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена или доступ запрещен")
+
+    systems = db.query(models.DataSystem).filter(
+        models.DataSystem.tenant_id == tenant_id,
+        models.DataSystem.user_id == current_user.id,
+        models.DataSystem.is_active == True
+    ).order_by(models.DataSystem.created_at.desc()).all()
+
+    return [_data_system_to_response(ds) for ds in systems]
+
+@app.post("/api/v1/data-systems/", response_model=DataSystemResponse)
+def create_data_system(
+    tenant_id: int,
+    data_system: DataSystemCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    tenant = db.query(models.Tenant).filter(
+        models.Tenant.id == tenant_id,
+        models.Tenant.user_id == current_user.id
+    ).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена или доступ запрещен")
+
+    # Проверка лимита ИС
+    current_count = db.query(models.DataSystem).filter(
+        models.DataSystem.tenant_id == tenant_id,
+        models.DataSystem.user_id == current_user.id,
+        models.DataSystem.is_active == True
+    ).count()
+
+    if current_count >= DATA_SYSTEM_FREE_TIER_LIMIT:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Достигнут лимит информационных систем для тарифа Free ({DATA_SYSTEM_FREE_TIER_LIMIT}). Обновите тариф для добавления новых ИС."
+        )
+
+    # Проверка уникальности названия в рамках компании
+    existing = db.query(models.DataSystem).filter(
+        models.DataSystem.tenant_id == tenant_id,
+        models.DataSystem.user_id == current_user.id,
+        models.DataSystem.name == data_system.name,
+        models.DataSystem.is_active == True
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Информационная система с названием «{data_system.name}» уже существует"
+        )
+
+    # Валидация system_type
+    allowed_types = {'local', 'cloud_saas', 'file', 'physical'}
+    if data_system.system_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"Недопустимый тип ИС: {data_system.system_type}")
+
+    # Сериализуем категории в JSON
+    categories_json = json.dumps(data_system.categories) if data_system.categories else "[]"
+
+    new_ds = models.DataSystem(
+        name=data_system.name,
+        system_type=data_system.system_type,
+        categories=categories_json,
+        data_location=data_system.data_location,
+        responsible_name=data_system.responsible_name,
+        responsible_position=data_system.responsible_position,
+        description=data_system.description,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+    )
+    db.add(new_ds)
+    db.commit()
+    db.refresh(new_ds)
+    return _data_system_to_response(new_ds)
+
+@app.get("/api/v1/data-systems/{system_id}", response_model=DataSystemResponse)
+def get_data_system(
+    system_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    ds = db.query(models.DataSystem).filter(
+        models.DataSystem.id == system_id,
+        models.DataSystem.user_id == current_user.id
+    ).first()
+    if not ds:
+        raise HTTPException(status_code=404, detail="Информационная система не найдена")
+    return _data_system_to_response(ds)
+
+@app.put("/api/v1/data-systems/{system_id}", response_model=DataSystemResponse)
+def update_data_system(
+    system_id: int,
+    data_system: DataSystemUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    db_ds = db.query(models.DataSystem).filter(
+        models.DataSystem.id == system_id,
+        models.DataSystem.user_id == current_user.id
+    ).first()
+    if not db_ds:
+        raise HTTPException(status_code=404, detail="Информационная система не найдена")
+
+    update_data = data_system.model_dump(exclude_unset=True)
+
+    # Валидация system_type
+    if "system_type" in update_data:
+        allowed_types = {'local', 'cloud_saas', 'file', 'physical'}
+        if update_data["system_type"] not in allowed_types:
+            raise HTTPException(status_code=400, detail=f"Недопустимый тип ИС: {update_data['system_type']}")
+
+    # Сериализация categories, если переданы
+    if "categories" in update_data:
+        update_data["categories"] = json.dumps(update_data["categories"]) if update_data["categories"] else "[]"
+
+    for field, value in update_data.items():
+        setattr(db_ds, field, value)
+
+    db_ds.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(db_ds)
+    return _data_system_to_response(db_ds)
+
+@app.delete("/api/v1/data-systems/{system_id}")
+def delete_data_system(
+    system_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    db_ds = db.query(models.DataSystem).filter(
+        models.DataSystem.id == system_id,
+        models.DataSystem.user_id == current_user.id
+    ).first()
+    if not db_ds:
+        raise HTTPException(status_code=404, detail="Информационная система не найдена")
+
+    # Мягкое удаление: помечаем is_active=False, чтобы сохранить историю
+    db_ds.is_active = False
+    db_ds.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"message": "Информационная система удалена"}
+
+@app.get("/api/v1/data-systems/limits", response_model=DataSystemLimitsResponse)
+def get_data_systems_limits(
+    tenant_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    tenant = db.query(models.Tenant).filter(
+        models.Tenant.id == tenant_id,
+        models.Tenant.user_id == current_user.id
+    ).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+
+    current_count = db.query(models.DataSystem).filter(
+        models.DataSystem.tenant_id == tenant_id,
+        models.DataSystem.user_id == current_user.id,
+        models.DataSystem.is_active == True
+    ).count()
+
+    return DataSystemLimitsResponse(
+        current=current_count,
+        limit=DATA_SYSTEM_FREE_TIER_LIMIT,
+        tariff="Free",
+        is_limit_reached=current_count >= DATA_SYSTEM_FREE_TIER_LIMIT,
+    )
+
+# ============================================================================
+# ПРИВЯЗКА СУБЪЕКТА ПДн К ИНФОРМАЦИОННЫМ СИСТЕМАМ
+# ============================================================================
+@app.put("/api/v1/pd-subjects/{subject_id}/data-systems")
+def set_subject_data_systems(
+    subject_id: int,
+    body: dict,  # { "data_system_ids": [1, 2, 3] }
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    db_subject = db.query(models.PdSubject).filter(
+        models.PdSubject.id == subject_id,
+        models.PdSubject.user_id == current_user.id
+    ).first()
+    if not db_subject:
+        raise HTTPException(status_code=404, detail="Запись не найдена или доступ запрещен")
+
+    ids = body.get("data_system_ids", [])
+    if not isinstance(ids, list):
+        raise HTTPException(status_code=400, detail="data_system_ids должен быть списком")
+
+    # Получаем ИС пользователя и фильтруем по переданным ID
+    allowed_systems = db.query(models.DataSystem).filter(
+        models.DataSystem.id.in_(ids),
+        models.DataSystem.user_id == current_user.id,
+        models.DataSystem.tenant_id == db_subject.tenant_id,
+        models.DataSystem.is_active == True
+    ).all()
+
+    db_subject.data_systems = allowed_systems
+    db.commit()
+    db.refresh(db_subject)
+    return {
+        "message": "Связи обновлены",
+        "data_system_ids": [ds.id for ds in db_subject.data_systems]
     }
 
 # ============================================================================
