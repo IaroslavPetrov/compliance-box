@@ -6,23 +6,20 @@ import { useIsMobile } from '../../../hooks/useIsMobile';
 import {
   IconArrowLeft,
   IconFileText,
-  IconCheckCircle,
-  IconXCircle,
-  IconAlert,
   IconClock,
 } from '../../../components/icons';
+import { useToast } from '../../../contexts/ToastContext';
 
 export default function DocumentsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const tenantId = searchParams.get('tenantId') || '1';
   const isMobile = useIsMobile();
+  const toast = useToast();
   
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState<string | null>(null);
-  const [progress, setProgress] = useState('');
 
   useEffect(() => {
     const fetchDocuments = async () => {
@@ -35,18 +32,16 @@ export default function DocumentsPage() {
         const data = await res.json();
         setDocuments(data);
       } catch (err: any) {
-        setError(err.message);
+        toast.error(err.message);
       } finally {
         setLoading(false);
       }
     };
     fetchDocuments();
-  }, []);
+  }, [toast]);
 
   const handleDownload = async (docId: string, format: 'pdf' | 'word') => {
     setGenerating(`${docId}-${format}`);
-    setError(null);
-    setProgress('generating');
     
     try {
       const controller = new AbortController();
@@ -73,7 +68,8 @@ export default function DocumentsPage() {
         throw new Error(`Ошибка генерации: ${res.status} - ${errText}`);
       }
       
-      setProgress('success');
+      toast.success(`Документ готов! Скачивание ${format.toUpperCase()}...`);
+      
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -84,15 +80,12 @@ export default function DocumentsPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       a.remove();
-      
-      setTimeout(() => setProgress(''), 3000);
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        setError('timeout');
+        toast.warning('Превышено время ожидания (60 сек). Попробуйте ещё раз.');
       } else {
-        setError(err.message);
+        toast.error(err.message);
       }
-      setProgress('');
     } finally {
       setGenerating(null);
     }
@@ -175,78 +168,6 @@ export default function DocumentsPage() {
             Назад в личный кабинет
           </button>
         </div>
-
-        {/* Сообщения о прогрессе или ошибках */}
-        {progress === 'generating' && (
-          <div style={{
-            padding: '1rem',
-            background: 'rgba(255, 193, 7, 0.1)',
-            border: '1px solid #FFC107',
-            borderRadius: '8px',
-            color: '#FFC107',
-            marginBottom: '1.5rem',
-            fontSize: '0.95rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-          }}>
-            <IconClock size={18} />
-            Генерация PDF... это может занять до 30 секунд.
-          </div>
-        )}
-        {progress === 'success' && (
-          <div style={{
-            padding: '1rem',
-            background: 'rgba(0, 200, 83, 0.1)',
-            border: '1px solid #00C853',
-            borderRadius: '8px',
-            color: '#00C853',
-            marginBottom: '1.5rem',
-            fontSize: '0.95rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-          }}>
-            <IconCheckCircle size={18} />
-            Документ готов! Скачивание...
-          </div>
-        )}
-        {error === 'timeout' && (
-          <div style={{
-            padding: '1rem',
-            background: 'rgba(255, 68, 68, 0.1)',
-            border: '1px solid #FF4444',
-            borderRadius: '8px',
-            color: '#FF4444',
-            marginBottom: '1.5rem',
-            fontSize: '0.95rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-          }}>
-            <IconAlert size={18} />
-            Превышено время ожидания (60 сек). Попробуйте ещё раз.
-          </div>
-        )}
-        {error && error !== 'timeout' && (
-          <div style={{
-            padding: '1rem',
-            background: 'rgba(255, 68, 68, 0.1)',
-            border: '1px solid #FF4444',
-            borderRadius: '8px',
-            color: '#FF4444',
-            marginBottom: '1.5rem',
-            fontSize: '0.95rem',
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '0.75rem',
-          }}>
-            <span style={{ flexShrink: 0, paddingTop: '0.1rem' }}>
-              <IconXCircle size={18} />
-            </span>
-            <span>Ошибка: {error}</span>
-          </div>
-        )}
 
         {/* Список документов */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
