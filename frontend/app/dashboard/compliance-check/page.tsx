@@ -2,6 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useIsMobile } from '../../../hooks/useIsMobile';
+import {
+  IconSearch,
+  IconShield,
+  IconArrowLeft,
+  IconClipboard,
+  IconCheckCircle,
+  IconXCircle,
+  IconAlert,
+} from '../../../components/icons';
 
 interface ComplianceCheck {
   name: string;
@@ -35,6 +45,7 @@ export default function ComplianceCheckPage() {
   const [error, setError] = useState('');
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const urlParam = searchParams.get('url');
@@ -149,7 +160,7 @@ export default function ComplianceCheckPage() {
     <div style={{
       minHeight: '100vh',
       background: '#0A0A0A',
-      padding: '2rem',
+      padding: isMobile ? '1rem' : '2rem',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       color: '#FFFFFF',
     }}>
@@ -170,6 +181,11 @@ export default function ComplianceCheckPage() {
               fontSize: '0.95rem',
               transition: 'all 0.3s',
               marginBottom: '1.5rem',
+              width: isMobile ? '100%' : 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = '#FF6B35';
@@ -180,13 +196,25 @@ export default function ComplianceCheckPage() {
               e.currentTarget.style.color = '#A0A0A0';
             }}
           >
-            ← Назад в личный кабинет
+            <IconArrowLeft />
+            Назад в личный кабинет
           </button>
           
-          <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: '700', color: '#FFFFFF' }}>
+          <h1 style={{
+            margin: 0,
+            fontSize: isMobile ? '1.5rem' : '2rem',
+            fontWeight: '700',
+            color: '#FFFFFF',
+            lineHeight: 1.2,
+          }}>
             Проверка на соответствие 152-ФЗ
           </h1>
-          <p style={{ color: '#A0A0A0', marginTop: '0.5rem', fontSize: '1rem' }}>
+          <p style={{
+            color: '#A0A0A0',
+            marginTop: '0.5rem',
+            fontSize: '1rem',
+            lineHeight: 1.45,
+          }}>
             Автоматическая проверка сайта на наличие обязательных элементов
           </p>
         </div>
@@ -194,12 +222,17 @@ export default function ComplianceCheckPage() {
         {/* Форма выбора */}
         <div style={{
           background: '#1A1A1A',
-          padding: '2rem',
+          padding: isMobile ? '1.25rem' : '2rem',
           borderRadius: '12px',
           border: '1px solid #2A2A2A',
           marginBottom: '2rem',
         }}>
-          <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.25rem', fontWeight: '600', color: '#FFFFFF' }}>
+          <h2 style={{
+            margin: '0 0 1.5rem',
+            fontSize: '1.25rem',
+            fontWeight: '600',
+            color: '#FFFFFF',
+          }}>
             Выберите сайт для проверки
           </h2>
 
@@ -278,11 +311,16 @@ export default function ComplianceCheckPage() {
               cursor: loading ? 'not-allowed' : 'pointer',
               transition: 'background 0.3s, transform 0.1s',
               letterSpacing: '0.02em',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
             }}
             onMouseDown={(e) => { if (!loading) e.currentTarget.style.transform = 'scale(0.98)'; }}
             onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
           >
-            {loading ? '🔍 Проверка...' : '🚀 Начать проверку'}
+            {loading ? <IconSearch /> : <IconShield />}
+            {loading ? 'Проверка...' : 'Начать проверку'}
           </button>
         </div>
 
@@ -290,22 +328,35 @@ export default function ComplianceCheckPage() {
         {result && (
           <div style={{
             background: '#1A1A1A',
-            padding: '2rem',
+            padding: isMobile ? '1.25rem' : '2rem',
             borderRadius: '12px',
             border: '1px solid #2A2A2A',
           }}>
-            <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.25rem', fontWeight: '600', color: '#FFFFFF' }}>
-              📊 Результаты проверки
+            <h2 style={{
+              margin: '0 0 1.5rem',
+              fontSize: '1.25rem',
+              fontWeight: '600',
+              color: '#FFFFFF',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+            }}>
+              <IconClipboard />
+              Результаты проверки
             </h2>
 
             <div style={{
-              padding: '1.5rem',
+              padding: isMobile ? '1rem' : '1.5rem',
               background: '#141414',
               borderRadius: '8px',
               marginBottom: '1.5rem',
               border: '1px solid #2A2A2A',
             }}>
-              <p style={{ margin: '0 0 0.5rem', color: '#A0A0A0' }}>
+              <p style={{
+                margin: '0 0 0.5rem',
+                color: '#A0A0A0',
+                wordBreak: 'break-all',
+              }}>
                 <strong style={{ color: '#FFFFFF' }}>Проверяемый сайт:</strong> {result.url}
               </p>
               <p style={{ margin: '0 0 0.5rem', color: '#A0A0A0' }}>
@@ -313,21 +364,27 @@ export default function ComplianceCheckPage() {
               </p>
               <div style={{
                 marginTop: '1rem',
-                padding: '1.5rem',
+                padding: isMobile ? '1rem' : '1.5rem',
                 background: '#0A0A0A',
                 borderRadius: '8px',
                 textAlign: 'center',
                 border: '1px solid #2A2A2A',
               }}>
                 <div style={{
-                  fontSize: '3.5rem',
+                  fontSize: isMobile ? '2.75rem' : '3.5rem',
                   fontWeight: '700',
                   color: getScoreColor(result.compliance_percentage),
                   lineHeight: 1,
                 }}>
                   {result.compliance_percentage}%
                 </div>
-                <p style={{ margin: '0.75rem 0 0', color: '#FFFFFF', fontSize: '1.1rem', fontWeight: '500' }}>
+                <p style={{
+                  margin: '0.75rem 0 0',
+                  color: '#FFFFFF',
+                  fontSize: isMobile ? '1rem' : '1.1rem',
+                  fontWeight: '500',
+                  lineHeight: 1.3,
+                }}>
                   Соответствие обязательным требованиям
                 </p>
                 <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem', color: '#A0A0A0' }}>
@@ -336,7 +393,12 @@ export default function ComplianceCheckPage() {
               </div>
             </div>
 
-            <h3 style={{ margin: '1.5rem 0 1rem', fontSize: '1.1rem', fontWeight: '600', color: '#FFFFFF' }}>
+            <h3 style={{
+              margin: '1.5rem 0 1rem',
+              fontSize: '1.1rem',
+              fontWeight: '600',
+              color: '#FFFFFF',
+            }}>
               Детальная проверка:
             </h3>
 
@@ -345,12 +407,13 @@ export default function ComplianceCheckPage() {
                 const borderColor = check.found ? '#00C853' : (check.required ? '#FF4444' : '#FFC107');
                 const bgColor = check.found ? 'rgba(0, 200, 83, 0.1)' : (check.required ? 'rgba(255, 68, 68, 0.1)' : 'rgba(255, 193, 7, 0.1)');
                 const badgeColor = check.required ? (check.found ? '#00C853' : '#FF4444') : '#FFC107';
+                const iconColor = check.found ? '#00C853' : (check.required ? '#FF4444' : '#FFC107');
 
                 return (
                   <div
                     key={key}
                     style={{
-                      padding: '1.25rem',
+                      padding: isMobile ? '1rem' : '1.25rem',
                       border: `1px solid ${borderColor}`,
                       borderRadius: '8px',
                       background: bgColor,
@@ -365,8 +428,21 @@ export default function ComplianceCheckPage() {
                       flexWrap: 'wrap',
                       gap: '0.5rem',
                     }}>
-                      <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '600', color: '#FFFFFF' }}>
-                        {check.found ? '✅' : (check.required ? '❌' : '⚠️')} {check.name}
+                      <h4 style={{
+                        margin: 0,
+                        fontSize: '1.05rem',
+                        fontWeight: '600',
+                        color: '#FFFFFF',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        flex: 1,
+                        minWidth: 0,
+                      }}>
+                        <span style={{ color: iconColor, display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+                          {check.found ? <IconCheckCircle size={18} /> : (check.required ? <IconXCircle size={18} /> : <IconAlert size={18} />)}
+                        </span>
+                        <span style={{ wordBreak: 'break-word' }}>{check.name}</span>
                       </h4>
                       <span style={{
                         padding: '0.35rem 0.75rem',
@@ -377,6 +453,8 @@ export default function ComplianceCheckPage() {
                         fontWeight: '700',
                         textTransform: 'uppercase',
                         letterSpacing: '0.05em',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
                       }}>
                         {check.required ? 'Обязательно' : 'Рекомендуется'}
                       </span>
@@ -407,7 +485,7 @@ export default function ComplianceCheckPage() {
             {/* Юридический дисклеймер */}
             <div style={{
               marginTop: '2rem',
-              padding: '1rem',
+              padding: isMobile ? '1rem' : '1rem 1.25rem',
               background: 'rgba(255, 193, 7, 0.1)',
               border: '1px solid #FFC107',
               borderRadius: '8px',
@@ -415,7 +493,9 @@ export default function ComplianceCheckPage() {
               alignItems: 'flex-start',
               gap: '0.75rem',
             }}>
-              <span style={{ fontSize: '1.25rem', flexShrink: 0 }}>⚠️</span>
+              <span style={{ color: '#FFC107', display: 'inline-flex', alignItems: 'center', flexShrink: 0, paddingTop: '0.15rem' }}>
+                <IconAlert size={20} />
+              </span>
               <div>
                 <p style={{
                   margin: 0,
