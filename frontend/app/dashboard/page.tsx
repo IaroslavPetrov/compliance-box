@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 interface Tenant {
   id: number;
@@ -22,6 +23,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const router = useRouter();
+  const isMobile = useIsMobile();
 
   // Состояния для редактирования
   const [showEditModal, setShowEditModal] = useState(false);
@@ -227,7 +229,7 @@ export default function DashboardPage() {
     <div style={{
       minHeight: '100vh',
       background: '#0A0A0A',
-      padding: '2rem',
+      padding: isMobile ? '1rem' : '2rem',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       color: '#FFFFFF',
     }}>
@@ -235,23 +237,29 @@ export default function DashboardPage() {
         {/* Шапка */}
         <div style={{
           display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'space-between',
-          alignItems: 'center',
+          alignItems: isMobile ? 'stretch' : 'center',
+          gap: isMobile ? '1rem' : '0',
           marginBottom: '2rem',
           background: '#1A1A1A',
-          padding: '1.5rem',
+          padding: isMobile ? '1.25rem' : '1.5rem',
           borderRadius: '12px',
           border: '1px solid #2A2A2A',
         }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: '700', color: '#FFFFFF' }}>
+            <h1 style={{ margin: 0, fontSize: isMobile ? '1.5rem' : '1.75rem', fontWeight: '700', color: '#FFFFFF' }}>
               Личный кабинет
             </h1>
             <p style={{ margin: '0.5rem 0 0', color: '#A0A0A0', fontSize: '0.95rem' }}>
               {user?.email}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <div style={{ 
+            display: 'flex', 
+            gap: '0.75rem',
+            flexDirection: isMobile ? 'column' : 'row',
+          }}>
             <button
               onClick={() => handleCheckWebsite()}
               style={{
@@ -264,6 +272,7 @@ export default function DashboardPage() {
                 fontWeight: '600',
                 fontSize: '0.95rem',
                 transition: 'background 0.3s',
+                width: isMobile ? '100%' : 'auto',
               }}
               onMouseEnter={(e) => e.currentTarget.style.background = '#E55A2B'}
               onMouseLeave={(e) => e.currentTarget.style.background = '#FF6B35'}
@@ -282,6 +291,7 @@ export default function DashboardPage() {
                 fontWeight: '600',
                 fontSize: '0.95rem',
                 transition: 'all 0.3s',
+                width: isMobile ? '100%' : 'auto',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = '#FF4444';
@@ -300,7 +310,7 @@ export default function DashboardPage() {
         {/* Список компаний */}
         <div style={{
           background: '#1A1A1A',
-          padding: '1.5rem',
+          padding: isMobile ? '1.25rem' : '1.5rem',
           borderRadius: '12px',
           border: '1px solid #2A2A2A',
         }}>
@@ -309,6 +319,8 @@ export default function DashboardPage() {
             justifyContent: 'space-between',
             alignItems: 'center',
             marginBottom: '1.5rem',
+            flexWrap: 'wrap',
+            gap: '1rem',
           }}>
             <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#FFFFFF' }}>
               Мои компании
@@ -325,6 +337,7 @@ export default function DashboardPage() {
                 fontWeight: '600',
                 fontSize: '0.95rem',
                 transition: 'all 0.3s',
+                width: isMobile ? '100%' : 'auto',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = '#3A3A3A';
@@ -356,7 +369,7 @@ export default function DashboardPage() {
           {tenants.length === 0 ? (
             <div style={{
               textAlign: 'center',
-              padding: '3rem',
+              padding: isMobile ? '2rem 1rem' : '3rem',
               color: '#A0A0A0',
             }}>
               <p style={{ fontSize: '1.1rem', marginBottom: '1.5rem' }}>
@@ -374,6 +387,7 @@ export default function DashboardPage() {
                   fontWeight: '600',
                   fontSize: '0.95rem',
                   transition: 'background 0.3s',
+                  width: isMobile ? '100%' : 'auto',
                 }}
                 onMouseEnter={(e) => e.currentTarget.style.background = '#E55A2B'}
                 onMouseLeave={(e) => e.currentTarget.style.background = '#FF6B35'}
@@ -387,7 +401,7 @@ export default function DashboardPage() {
                 <div
                   key={tenant.id}
                   style={{
-                    padding: '1.25rem',
+                    padding: isMobile ? '1rem' : '1.25rem',
                     border: '1px solid #2A2A2A',
                     borderRadius: '10px',
                     background: '#141414',
@@ -398,8 +412,10 @@ export default function DashboardPage() {
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = '#FF6B35';
                     e.currentTarget.style.background = '#1A1A1A';
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(255, 107, 53, 0.1)';
+                    if (!isMobile) {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 8px 24px rgba(255, 107, 53, 0.1)';
+                    }
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = '#2A2A2A';
@@ -410,8 +426,9 @@ export default function DashboardPage() {
                 >
                   <div style={{
                     display: 'flex',
+                    flexDirection: isMobile ? 'column' : 'row',
                     justifyContent: 'space-between',
-                    alignItems: 'flex-start',
+                    alignItems: isMobile ? 'stretch' : 'flex-start',
                     gap: '1rem',
                   }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -422,7 +439,7 @@ export default function DashboardPage() {
                         <strong style={{ color: '#FFFFFF' }}>ИНН:</strong> {tenant.inn}
                       </p>
                       {tenant.email && (
-                        <p style={{ margin: '0.25rem 0', color: '#A0A0A0', fontSize: '0.95rem' }}>
+                        <p style={{ margin: '0.25rem 0', color: '#A0A0A0', fontSize: '0.95rem', wordBreak: 'break-all' }}>
                           <strong style={{ color: '#FFFFFF' }}>Email:</strong> {tenant.email}
                         </p>
                       )}
@@ -433,7 +450,7 @@ export default function DashboardPage() {
                             href={tenant.website}
                             target="_blank"
                             rel="noopener noreferrer"
-                            style={{ color: '#FF6B35', textDecoration: 'none', transition: 'color 0.2s' }}
+                            style={{ color: '#FF6B35', textDecoration: 'none', transition: 'color 0.2s', wordBreak: 'break-all' }}
                             onClick={(e) => e.stopPropagation()}
                             onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
                             onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
@@ -454,9 +471,10 @@ export default function DashboardPage() {
                     {/* Кнопки действий */}
                     <div style={{
                       display: 'flex',
-                      flexDirection: 'column',
+                      flexDirection: isMobile ? 'row' : 'column',
                       gap: '0.5rem',
                       flexShrink: 0,
+                      flexWrap: 'wrap',
                     }}>
                       {/* НОВАЯ КНОПКА: Реестр ПДн */}
                       <button
@@ -475,6 +493,7 @@ export default function DashboardPage() {
                           fontSize: '0.85rem',
                           transition: 'all 0.3s',
                           whiteSpace: 'nowrap',
+                          flex: isMobile ? 1 : 'none',
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = '#00C853';
@@ -505,6 +524,7 @@ export default function DashboardPage() {
                             fontSize: '0.85rem',
                             transition: 'all 0.3s',
                             whiteSpace: 'nowrap',
+                            flex: isMobile ? 1 : 'none',
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.background = '#FF6B35';
@@ -534,6 +554,7 @@ export default function DashboardPage() {
                           fontSize: '0.85rem',
                           transition: 'all 0.3s',
                           whiteSpace: 'nowrap',
+                          flex: isMobile ? 1 : 'none',
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = '#4A90E2';
@@ -562,6 +583,7 @@ export default function DashboardPage() {
                           fontSize: '0.85rem',
                           transition: 'all 0.3s',
                           whiteSpace: 'nowrap',
+                          flex: isMobile ? 1 : 'none',
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = '#FF4444';
@@ -597,7 +619,7 @@ export default function DashboardPage() {
             justifyContent: 'center',
             alignItems: 'center',
             zIndex: 1000,
-            padding: '2rem',
+            padding: isMobile ? '1rem' : '2rem',
           }}
           onClick={closeEditModal}
         >
@@ -605,7 +627,7 @@ export default function DashboardPage() {
             style={{
               background: '#1A1A1A',
               borderRadius: '12px',
-              padding: '2rem',
+              padding: isMobile ? '1.5rem' : '2rem',
               maxWidth: '600px',
               width: '100%',
               maxHeight: '90vh',
@@ -621,7 +643,7 @@ export default function DashboardPage() {
               alignItems: 'center',
               marginBottom: '1.5rem',
             }}>
-              <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '700', color: '#FFFFFF' }}>
+              <h2 style={{ margin: 0, fontSize: isMobile ? '1.25rem' : '1.5rem', fontWeight: '700', color: '#FFFFFF' }}>
                 Редактировать компанию
               </h2>
               <button
@@ -833,6 +855,7 @@ export default function DashboardPage() {
 
             <div style={{
               display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
               gap: '0.75rem',
               marginTop: '1.5rem',
             }}>
@@ -901,7 +924,7 @@ export default function DashboardPage() {
             justifyContent: 'center',
             alignItems: 'center',
             zIndex: 1000,
-            padding: '2rem',
+            padding: isMobile ? '1rem' : '2rem',
           }}
           onClick={cancelDelete}
         >
@@ -909,7 +932,7 @@ export default function DashboardPage() {
             style={{
               background: '#1A1A1A',
               borderRadius: '12px',
-              padding: '2rem',
+              padding: isMobile ? '1.5rem' : '2rem',
               maxWidth: '450px',
               width: '100%',
               border: '1px solid #FF4444',
@@ -919,7 +942,7 @@ export default function DashboardPage() {
           >
             <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
               <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
-              <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.5rem', fontWeight: '700', color: '#FFFFFF' }}>
+              <h2 style={{ margin: '0 0 0.5rem', fontSize: isMobile ? '1.25rem' : '1.5rem', fontWeight: '700', color: '#FFFFFF' }}>
                 Удалить компанию?
               </h2>
               <p style={{ margin: 0, color: '#A0A0A0', fontSize: '0.95rem' }}>
@@ -927,7 +950,11 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: '0.75rem',
+            }}>
               <button
                 onClick={cancelDelete}
                 disabled={deleting}
