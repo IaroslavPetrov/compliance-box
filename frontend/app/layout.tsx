@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { ToastProvider } from '../contexts/ToastContext'
+import { PostHogProvider, PostHogPageView } from '../contexts/PostHogClient'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -19,9 +21,14 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://compliance-box-backend.onrender.com" />
       </head>
       <body style={{ margin: 0, fontFamily: 'system-ui, -apple-system, sans-serif', backgroundColor: '#0A0A0A' }}>
-        <ToastProvider>
-          {children}
-        </ToastProvider>
+        <PostHogProvider>
+          <ToastProvider>
+            <Suspense fallback={null}>
+              <PostHogPageView />
+            </Suspense>
+            {children}
+          </ToastProvider>
+        </PostHogProvider>
       </body>
     </html>
   );
