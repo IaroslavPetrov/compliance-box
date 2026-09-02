@@ -13,6 +13,7 @@ import {
   IconLogout,
 } from '../../components/icons';
 import { useToast } from '../../contexts/ToastContext';
+import posthog from '../../contexts/posthog';
 
 // Lazy loading модалок — загрузятся только при первом открытии
 const EditTenantModal = dynamic(() => import('../../components/modals/EditTenantModal'), {
@@ -100,6 +101,7 @@ export default function DashboardPage() {
   };
 
   const handleAddCompany = () => {
+    posthog.capture('add_company_clicked');
     router.push('/dashboard/tenants/new');
   };
 
@@ -157,6 +159,7 @@ export default function DashboardPage() {
       }
 
       toast.success('Компания удалена');
+      posthog.capture('tenant_deleted');
       await fetchDashboardData();
       setDeleteConfirmId(null);
     } catch (err: any) {

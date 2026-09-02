@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { IconShield } from '../components/icons';
 import { useToast } from '../contexts/ToastContext';
+import posthog from '../contexts/posthog';
 
 export default function HomePage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -50,6 +51,8 @@ export default function HomePage() {
         const data = await res.json();
         localStorage.setItem('token', data.access_token);
         toast.success('Вход выполнен. Добро пожаловать!');
+        posthog.identify(cleanEmail, { email: cleanEmail });
+        posthog.capture('user_logged_in');
         router.push('/dashboard');
       } else {
         const res = await fetch('https://compliance-box-backend.onrender.com/api/v1/auth/register', {
@@ -85,6 +88,8 @@ export default function HomePage() {
         const loginData = await loginRes.json();
         localStorage.setItem('token', loginData.access_token);
         toast.success('Аккаунт создан! Добро пожаловать в ComplianceBox.');
+        posthog.identify(cleanEmail, { email: cleanEmail });
+        posthog.capture('user_registered');
         router.push('/dashboard');
       }
     } catch (err: any) {

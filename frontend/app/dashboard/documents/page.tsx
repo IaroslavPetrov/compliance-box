@@ -9,6 +9,7 @@ import {
   IconClock,
 } from '../../../components/icons';
 import { useToast } from '../../../contexts/ToastContext';
+import posthog from '../../../contexts/posthog';
 
 export default function DocumentsPage() {
   const searchParams = useSearchParams();
@@ -69,6 +70,7 @@ export default function DocumentsPage() {
       }
       
       toast.success(`Документ готов! Скачивание ${format.toUpperCase()}...`);
+      posthog.capture('document_downloaded', { doc_id: docId, format, tenant_id: tenantId });
       
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);

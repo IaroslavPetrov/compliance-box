@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useToast } from '../../contexts/ToastContext';
+import posthog from '../../contexts/posthog';
 import { IconClose } from '../icons';
 
 interface Tenant {
@@ -66,6 +67,7 @@ export default function EditTenantModal({ tenant, onClose, onSaved }: EditTenant
       }
 
       toast.success('Изменения сохранены');
+        posthog.capture('tenant_updated', { tenant_id: tenant.id });
       onSaved();
     } catch (err: any) {
       toast.error(err.message);

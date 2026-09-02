@@ -13,6 +13,7 @@ import {
   IconAlert,
 } from '../../../components/icons';
 import { useToast } from '../../../contexts/ToastContext';
+import posthog from '../../../contexts/posthog';
 
 interface ComplianceCheck {
   name: string;
@@ -112,6 +113,12 @@ export default function ComplianceCheckPage() {
 
       const data = await res.json();
       setResult(data);
+      posthog.capture('compliance_check_completed', {
+        url: urlToCheck,
+        score: data.compliance_percentage,
+        passed: data.passed_required,
+        total: data.total_required,
+      });
     } catch (err: any) {
       toast.error(err.message);
     } finally {

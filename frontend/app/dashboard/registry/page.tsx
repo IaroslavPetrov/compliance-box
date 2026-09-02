@@ -13,6 +13,7 @@ import {
   IconUsers,
 } from '../../../components/icons';
 import { useToast } from '../../../contexts/ToastContext';
+import posthog from '../../../contexts/posthog';
 
 // ============================================================================
 // ИНТЕРФЕЙСЫ И СПРАВОЧНИКИ
