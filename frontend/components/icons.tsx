@@ -150,3 +150,26 @@ export const IconClock = (p: IconProps) => (
     <polyline points="12 6 12 12 16 14" />
   </Svg>
 );
+
+export const IconHome = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
+  </Svg>
+);
+
+export const IconMap = (p: IconProps) => (
+  <Svg {...p}>
+    <polygon points="1 6 1 22 8 18 15 22 23 18 23 2 16 6 9 2 1 6" />
+    <line x1="9" y1="3" x2="9" y2="15" />
+    <line x1="15" y1="7" x2="15" y2="19" />
+  </Svg>
+);
+
+export const IconMenu = (p: IconProps) => (
+  <Svg {...p}>
+    <line x1="3" y1="6" x2="21" y2="6" />
+    <line x1="3" y1="12" x2="21" y2="12" />
+    <line x1="3" y1="18" x2="21" y2="18" />
+  </Svg>
+);
