@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { IconShield, IconXCircle } from '../components/icons';
 
 export default function HomePage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -11,6 +13,7 @@ export default function HomePage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const isMobile = useIsMobile();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,13 +113,13 @@ export default function HomePage() {
       alignItems: 'center',
       justifyContent: 'center',
       background: '#0A0A0A',
-      padding: '2rem',
+      padding: isMobile ? '1rem' : '2rem',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
     }}>
       <div style={{
         background: '#1A1A1A',
         borderRadius: '16px',
-        padding: '3rem',
+        padding: isMobile ? '2rem 1.5rem' : '3rem',
         maxWidth: '480px',
         width: '100%',
         boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
@@ -124,10 +127,18 @@ export default function HomePage() {
       }}>
         {/* Логотип и заголовок */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            marginBottom: '1rem',
+            color: '#FF6B35',
+          }}>
+            <IconShield size={40} strokeWidth={1.5} />
+          </div>
           <h1 style={{
             margin: 0,
             color: '#FFFFFF',
-            fontSize: '2.5rem',
+            fontSize: isMobile ? '2rem' : '2.5rem',
             fontWeight: '700',
             letterSpacing: '-0.02em',
           }}>
@@ -292,8 +303,15 @@ export default function HomePage() {
               color: '#FF1744',
               marginBottom: '1.5rem',
               fontSize: '0.9rem',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '0.75rem',
+              lineHeight: 1.4,
             }}>
-              {error}
+              <span style={{ flexShrink: 0, paddingTop: '0.1rem' }}>
+                <IconXCircle size={18} />
+              </span>
+              <span>{error}</span>
             </div>
           )}
 
