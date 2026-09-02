@@ -3,6 +3,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import {
+  IconSearch,
+  IconClipboard,
+  IconEdit,
+  IconTrash,
+  IconAlert,
+  IconPlus,
+  IconClose,
+  IconLogout,
+} from '../../components/icons';
 
 interface Tenant {
   id: number;
@@ -273,11 +283,16 @@ export default function DashboardPage() {
                 fontSize: '0.95rem',
                 transition: 'background 0.3s',
                 width: isMobile ? '100%' : 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
               }}
               onMouseEnter={(e) => e.currentTarget.style.background = '#E55A2B'}
               onMouseLeave={(e) => e.currentTarget.style.background = '#FF6B35'}
             >
-              🔍 Проверка сайта
+              <IconSearch />
+              Проверка сайта
             </button>
             <button
               onClick={handleLogout}
@@ -292,6 +307,10 @@ export default function DashboardPage() {
                 fontSize: '0.95rem',
                 transition: 'all 0.3s',
                 width: isMobile ? '100%' : 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = '#FF4444';
@@ -302,6 +321,7 @@ export default function DashboardPage() {
                 e.currentTarget.style.color = '#FF4444';
               }}
             >
+              <IconLogout />
               Выйти
             </button>
           </div>
@@ -338,6 +358,10 @@ export default function DashboardPage() {
                 fontSize: '0.95rem',
                 transition: 'all 0.3s',
                 width: isMobile ? '100%' : 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = '#3A3A3A';
@@ -348,7 +372,8 @@ export default function DashboardPage() {
                 e.currentTarget.style.borderColor = '#3A3A3A';
               }}
             >
-              + Добавить компанию
+              <IconPlus />
+              Добавить компанию
             </button>
           </div>
 
@@ -388,10 +413,15 @@ export default function DashboardPage() {
                   fontSize: '0.95rem',
                   transition: 'background 0.3s',
                   width: isMobile ? '100%' : 'auto',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
                 }}
                 onMouseEnter={(e) => e.currentTarget.style.background = '#E55A2B'}
                 onMouseLeave={(e) => e.currentTarget.style.background = '#FF6B35'}
               >
+                <IconPlus />
                 Добавить первую компанию
               </button>
             </div>
@@ -476,7 +506,6 @@ export default function DashboardPage() {
                       flexShrink: 0,
                       flexWrap: 'wrap',
                     }}>
-                      {/* НОВАЯ КНОПКА: Реестр ПДн */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -494,6 +523,10 @@ export default function DashboardPage() {
                           transition: 'all 0.3s',
                           whiteSpace: 'nowrap',
                           flex: isMobile ? 1 : 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.4rem',
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = '#00C853';
@@ -504,7 +537,8 @@ export default function DashboardPage() {
                           e.currentTarget.style.color = '#00C853';
                         }}
                       >
-                        📋 Реестр ПДн
+                        <IconClipboard size={13} />
+                        Реестр ПДн
                       </button>
 
                       {tenant.website && (
@@ -525,6 +559,10 @@ export default function DashboardPage() {
                             transition: 'all 0.3s',
                             whiteSpace: 'nowrap',
                             flex: isMobile ? 1 : 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.4rem',
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.background = '#FF6B35';
@@ -535,7 +573,8 @@ export default function DashboardPage() {
                             e.currentTarget.style.color = '#FF6B35';
                           }}
                         >
-                          🔍 Проверить
+                          <IconSearch size={13} />
+                          Проверить
                         </button>
                       )}
                       <button
@@ -555,6 +594,10 @@ export default function DashboardPage() {
                           transition: 'all 0.3s',
                           whiteSpace: 'nowrap',
                           flex: isMobile ? 1 : 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.4rem',
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = '#4A90E2';
@@ -565,7 +608,8 @@ export default function DashboardPage() {
                           e.currentTarget.style.color = '#4A90E2';
                         }}
                       >
-                        ✏️ Изменить
+                        <IconEdit size={13} />
+                        Изменить
                       </button>
                       <button
                         onClick={(e) => {
@@ -584,6 +628,10 @@ export default function DashboardPage() {
                           transition: 'all 0.3s',
                           whiteSpace: 'nowrap',
                           flex: isMobile ? 1 : 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.4rem',
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = '#FF4444';
@@ -594,7 +642,8 @@ export default function DashboardPage() {
                           e.currentTarget.style.color = '#FF4444';
                         }}
                       >
-                        🗑️ Удалить
+                        <IconTrash size={13} />
+                        Удалить
                       </button>
                     </div>
                   </div>
@@ -652,15 +701,18 @@ export default function DashboardPage() {
                   background: 'transparent',
                   border: 'none',
                   color: '#A0A0A0',
-                  fontSize: '1.5rem',
                   cursor: 'pointer',
-                  padding: '0.25rem 0.5rem',
+                  padding: '0.25rem',
                   lineHeight: 1,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
                 onMouseEnter={(e) => e.currentTarget.style.color = '#FF4444'}
                 onMouseLeave={(e) => e.currentTarget.style.color = '#A0A0A0'}
+                aria-label="Закрыть"
               >
-                ✕
+                <IconClose />
               </button>
             </div>
 
@@ -941,7 +993,14 @@ export default function DashboardPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                marginBottom: '1rem',
+                color: '#FF4444',
+              }}>
+                <IconAlert size={44} strokeWidth={1.5} />
+              </div>
               <h2 style={{ margin: '0 0 0.5rem', fontSize: isMobile ? '1.25rem' : '1.5rem', fontWeight: '700', color: '#FFFFFF' }}>
                 Удалить компанию?
               </h2>
