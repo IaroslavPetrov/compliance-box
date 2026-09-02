@@ -105,7 +105,7 @@ export const IconXCircle = (p: IconProps) => (
 
 export const IconShield = (p: IconProps) => (
   <Svg {...p}>
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v11c0 6 8 10 8 10z" />
+    <path d="M12 2L20 5V11C20 16.5 16.6 20.7 12 22C7.4 20.7 4 16.5 4 11V5L12 2Z" />
   </Svg>
 );
 
@@ -143,6 +143,7 @@ export const IconLogout = (p: IconProps) => (
     <line x1="21" y1="12" x2="9" y2="12" />
   </Svg>
 );
+
 export const IconClock = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="10" />
