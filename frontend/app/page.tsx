@@ -3,28 +3,28 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { IconShield, IconXCircle } from '../components/icons';
+import { IconShield } from '../components/icons';
+import { useToast } from '../contexts/ToastContext';
 
 export default function HomePage() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const isMobile = useIsMobile();
+  const toast = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     
     // Очищаем пароль от случайных пробелов и символов
     const cleanPassword = password.trim();
     const cleanEmail = email.trim();
 
     if (cleanPassword.length > 72) {
-      setError('Пароль слишком длинный (макс. 72 символа). Проверьте, не сработало ли автозаполнение.');
+      toast.error('Пароль слишком длинный (макс. 72 символа). Проверьте, не сработало ли автозаполнение.');
       return;
     }
 
@@ -49,6 +49,7 @@ export default function HomePage() {
 
         const data = await res.json();
         localStorage.setItem('token', data.access_token);
+        toast.success('Вход выполнен. Добро пожаловать!');
         router.push('/dashboard');
       } else {
         const res = await fetch('https://compliance-box-backend.onrender.com/api/v1/auth/register', {
@@ -83,10 +84,11 @@ export default function HomePage() {
 
         const loginData = await loginRes.json();
         localStorage.setItem('token', loginData.access_token);
+        toast.success('Аккаунт создан! Добро пожаловать в ComplianceBox.');
         router.push('/dashboard');
       }
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -293,27 +295,6 @@ export default function HomePage() {
               Введите вручную, без пробелов. Макс. 72 символа.
             </small>
           </div>
-
-          {error && (
-            <div style={{
-              padding: '1rem',
-              background: 'rgba(255, 23, 68, 0.1)',
-              border: '1px solid #FF1744',
-              borderRadius: '8px',
-              color: '#FF1744',
-              marginBottom: '1.5rem',
-              fontSize: '0.9rem',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '0.75rem',
-              lineHeight: 1.4,
-            }}>
-              <span style={{ flexShrink: 0, paddingTop: '0.1rem' }}>
-                <IconXCircle size={18} />
-              </span>
-              <span>{error}</span>
-            </div>
-          )}
 
           <button
             type="submit"
