@@ -2,7 +2,67 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useIsMobile } from '../../../hooks/useIsMobile';
 
+// ============================================================================
+// МИНИМАЛИСТИЧНЫЕ SVG-ИКОНКИ (стиль Feather, stroke = currentColor)
+// ============================================================================
+const IconEdit = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+  </svg>
+);
+
+const IconTrash = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+);
+
+const IconAlert = ({ size = 44 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
+
+const IconArrowLeft = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="19" y1="12" x2="5" y2="12" />
+    <polyline points="12 19 5 12 12 5" />
+  </svg>
+);
+
+const IconPlus = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const IconClose = ({ size = 20 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+const IconUsers = ({ size = 44 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+
+// ============================================================================
+// ИНТЕРФЕЙСЫ И СПРАВОЧНИКИ
+// ============================================================================
 interface PdSubject {
   id: number;
   full_name: string;
@@ -42,6 +102,7 @@ export default function RegistryPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tenantId = searchParams.get('tenantId');
+  const isMobile = useIsMobile();
 
   const [subjects, setSubjects] = useState<PdSubject[]>([]);
   const [limits, setLimits] = useState<LimitsInfo | null>(null);
@@ -64,11 +125,16 @@ export default function RegistryPage() {
 
   const fetchData = useCallback(async () => {
     if (!tenantId) return;
+
     setLoading(true);
     setError('');
+
     try {
       const token = localStorage.getItem('token');
-      if (!token) { router.push('/'); return; }
+      if (!token) {
+        router.push('/');
+        return;
+      }
 
       const [subjectsRes, limitsRes] = await Promise.all([
         fetch(`https://compliance-box-backend.onrender.com/api/v1/pd-subjects/?tenant_id=${tenantId}`, {
@@ -79,7 +145,9 @@ export default function RegistryPage() {
         }),
       ]);
 
-      if (!subjectsRes.ok || !limitsRes.ok) throw new Error('Не удалось загрузить данные');
+      if (!subjectsRes.ok || !limitsRes.ok) {
+        throw new Error('Не удалось загрузить данные');
+      }
 
       setSubjects(await subjectsRes.json());
       setLimits(await limitsRes.json());
@@ -96,10 +164,13 @@ export default function RegistryPage() {
 
   const openAddModal = () => {
     if (limits?.is_limit_reached) {
+      setEditingSubject(null);
+      setFormData({ full_name: '', category: '', legal_basis: '', data_types: '' });
       setModalError(`Достигнут лимит ${limits.limit} записей для тарифа ${limits.tariff}. Обновите тариф для снятия ограничений.`);
       setShowModal(true);
       return;
     }
+
     setEditingSubject(null);
     setFormData({ full_name: '', category: '', legal_basis: '', data_types: '' });
     setModalError('');
@@ -130,21 +201,30 @@ export default function RegistryPage() {
   };
 
   const handleSave = async () => {
+    if (limits?.is_limit_reached && !editingSubject) {
+      setModalError(`Достигнут лимит ${limits.limit} записей для тарифа ${limits.tariff}. Обновите тариф для снятия ограничений.`);
+      return;
+    }
+
     if (!formData.full_name || !formData.category || !formData.legal_basis) {
       setModalError('Заполните обязательные поля: ФИО, категория и основание обработки');
       return;
     }
+
     if (!tenantId) return;
 
     setSaving(true);
     setModalError('');
+
     try {
       const token = localStorage.getItem('token');
+
       const url = editingSubject
         ? `https://compliance-box-backend.onrender.com/api/v1/pd-subjects/${editingSubject.id}`
         : `https://compliance-box-backend.onrender.com/api/v1/pd-subjects/?tenant_id=${tenantId}`;
 
       const method = editingSubject ? 'PUT' : 'POST';
+
       const res = await fetch(url, {
         method,
         headers: {
@@ -170,9 +250,12 @@ export default function RegistryPage() {
 
   const confirmDelete = async () => {
     if (!deleteConfirmId) return;
+
     setDeleting(true);
+
     try {
       const token = localStorage.getItem('token');
+
       const res = await fetch(
         `https://compliance-box-backend.onrender.com/api/v1/pd-subjects/${deleteConfirmId}`,
         {
@@ -180,10 +263,12 @@ export default function RegistryPage() {
           headers: { 'Authorization': `Bearer ${token}` },
         }
       );
+
       if (!res.ok) {
         const errData = await res.json();
         throw new Error(errData.detail || 'Ошибка при удалении');
       }
+
       await fetchData();
       setDeleteConfirmId(null);
     } catch (err: any) {
@@ -208,36 +293,88 @@ export default function RegistryPage() {
     fontFamily: 'inherit',
   };
 
+  const tableMinWidth = '760px';
+
   if (!tenantId) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0A0A0A', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#A0A0A0', fontFamily: '-apple-system, sans-serif' }}>
-        <p>Компания не выбрана. <a href="/dashboard" style={{ color: '#FF6B35' }}>Вернуться в личный кабинет</a></p>
+      <div style={{
+        minHeight: '100vh',
+        background: '#0A0A0A',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        color: '#A0A0A0',
+        fontFamily: '-apple-system, sans-serif',
+        padding: '1rem',
+        textAlign: 'center',
+      }}>
+        <p>
+          Компания не выбрана.{' '}
+          <a href="/dashboard" style={{ color: '#FF6B35' }}>
+            Вернуться в личный кабинет
+          </a>
+        </p>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#0A0A0A', color: '#A0A0A0', fontFamily: '-apple-system, sans-serif' }}>
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        background: '#0A0A0A',
+        color: '#A0A0A0',
+        fontFamily: '-apple-system, sans-serif',
+        padding: '1rem',
+        textAlign: 'center',
+      }}>
         <p style={{ fontSize: '1.2rem' }}>Загрузка реестра...</p>
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0A0A0A', padding: '2rem', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', color: '#FFFFFF' }}>
+    <div style={{
+      minHeight: '100vh',
+      background: '#0A0A0A',
+      padding: isMobile ? '1rem' : '2rem',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      color: '#FFFFFF',
+    }}>
       <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
 
         {/* Шапка */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          justifyContent: 'space-between',
+          alignItems: isMobile ? 'stretch' : 'center',
+          gap: '1rem',
+          marginBottom: isMobile ? '1.5rem' : '2rem',
+        }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: '700', color: '#FFFFFF' }}>
+            <h1 style={{
+              margin: 0,
+              fontSize: isMobile ? '1.5rem' : '2rem',
+              fontWeight: '700',
+              color: '#FFFFFF',
+              lineHeight: 1.2,
+            }}>
               Реестр субъектов ПДн
             </h1>
-            <p style={{ color: '#A0A0A0', marginTop: '0.5rem', fontSize: '0.95rem' }}>
+            <p style={{
+              color: '#A0A0A0',
+              marginTop: '0.5rem',
+              fontSize: '0.95rem',
+              lineHeight: 1.45,
+            }}>
               Управление записями о лицах, чьи персональные данные обрабатывает компания
             </p>
           </div>
+
           <button
             onClick={() => router.push('/dashboard')}
             style={{
@@ -250,11 +387,24 @@ export default function RegistryPage() {
               fontWeight: '600',
               fontSize: '0.95rem',
               transition: 'all 0.3s',
+              width: isMobile ? '100%' : 'auto',
+              whiteSpace: 'nowrap',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#FF6B35'; e.currentTarget.style.color = '#FF6B35'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2A2A2A'; e.currentTarget.style.color = '#A0A0A0'; }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = '#FF6B35';
+              e.currentTarget.style.color = '#FF6B35';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = '#2A2A2A';
+              e.currentTarget.style.color = '#A0A0A0';
+            }}
           >
-            ← Назад в личный кабинет
+            <IconArrowLeft />
+            Назад в личный кабинет
           </button>
         </div>
 
@@ -262,30 +412,56 @@ export default function RegistryPage() {
         {limits && (
           <div style={{
             background: '#1A1A1A',
-            padding: '1.25rem',
+            padding: isMobile ? '1rem' : '1.25rem',
             borderRadius: '12px',
             border: `1px solid ${limits.is_limit_reached ? '#FF4444' : '#2A2A2A'}`,
             marginBottom: '1.5rem',
             display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
             justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
+            alignItems: isMobile ? 'stretch' : 'center',
             gap: '1rem',
           }}>
             <div>
-              <p style={{ margin: 0, fontSize: '0.9rem', color: '#A0A0A0' }}>Текущий тариф</p>
-              <p style={{ margin: '0.25rem 0 0', fontSize: '1.25rem', fontWeight: '700', color: '#FFFFFF' }}>
+              <p style={{ margin: 0, fontSize: '0.9rem', color: '#A0A0A0' }}>
+                Текущий тариф
+              </p>
+              <p style={{
+                margin: '0.25rem 0 0',
+                fontSize: '1.25rem',
+                fontWeight: '700',
+                color: '#FFFFFF',
+              }}>
                 {limits.tariff}
               </p>
             </div>
-            <div style={{ flex: 1, minWidth: '200px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.9rem', color: '#A0A0A0' }}>Записи реестра</span>
-                <span style={{ fontSize: '0.9rem', color: limits.is_limit_reached ? '#FF4444' : '#00C853', fontWeight: '600' }}>
+
+            <div style={{ flex: 1, minWidth: isMobile ? '0' : '200px' }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: '1rem',
+                marginBottom: '0.5rem',
+              }}>
+                <span style={{ fontSize: '0.9rem', color: '#A0A0A0' }}>
+                  Записи реестра
+                </span>
+                <span style={{
+                  fontSize: '0.9rem',
+                  color: limits.is_limit_reached ? '#FF4444' : '#00C853',
+                  fontWeight: '600',
+                  whiteSpace: 'nowrap',
+                }}>
                   {limits.current} / {limits.limit}
                 </span>
               </div>
-              <div style={{ height: '8px', background: '#2A2A2A', borderRadius: '4px', overflow: 'hidden' }}>
+
+              <div style={{
+                height: '8px',
+                background: '#2A2A2A',
+                borderRadius: '4px',
+                overflow: 'hidden',
+              }}>
                 <div style={{
                   height: '100%',
                   width: `${Math.min((limits.current / limits.limit) * 100, 100)}%`,
@@ -294,9 +470,10 @@ export default function RegistryPage() {
                 }} />
               </div>
             </div>
+
             {limits.is_limit_reached && (
               <button style={{
-                padding: '0.6rem 1.25rem',
+                padding: '0.75rem 1.25rem',
                 background: '#FF6B35',
                 color: '#FFFFFF',
                 border: 'none',
@@ -304,6 +481,7 @@ export default function RegistryPage() {
                 cursor: 'pointer',
                 fontWeight: '600',
                 fontSize: '0.9rem',
+                width: isMobile ? '100%' : 'auto',
               }}>
                 Обновить тариф
               </button>
@@ -314,13 +492,21 @@ export default function RegistryPage() {
         {/* Панель действий */}
         <div style={{
           display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'space-between',
-          alignItems: 'center',
+          alignItems: isMobile ? 'stretch' : 'center',
+          gap: '1rem',
           marginBottom: '1.5rem',
         }}>
-          <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600', color: '#FFFFFF' }}>
+          <h2 style={{
+            margin: 0,
+            fontSize: '1.25rem',
+            fontWeight: '600',
+            color: '#FFFFFF',
+          }}>
             Записи ({subjects.length})
           </h2>
+
           <button
             onClick={openAddModal}
             disabled={limits?.is_limit_reached}
@@ -334,11 +520,23 @@ export default function RegistryPage() {
               fontWeight: '600',
               fontSize: '0.95rem',
               transition: 'background 0.3s',
+              width: isMobile ? '100%' : 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
             }}
-            onMouseEnter={(e) => { if (!limits?.is_limit_reached) e.currentTarget.style.background = '#E55A2B'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = limits?.is_limit_reached ? '#4A4A4A' : '#FF6B35'; }}
+            onMouseEnter={(e) => {
+              if (!limits?.is_limit_reached) {
+                e.currentTarget.style.background = '#E55A2B';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = limits?.is_limit_reached ? '#4A4A4A' : '#FF6B35';
+            }}
           >
-            + Добавить субъекта
+            <IconPlus />
+            Добавить субъекта
           </button>
         </div>
 
@@ -350,32 +548,54 @@ export default function RegistryPage() {
             borderRadius: '8px',
             color: '#FF4444',
             marginBottom: '1.5rem',
-          }}>{error}</div>
+            fontSize: '0.95rem',
+            lineHeight: 1.4,
+          }}>
+            {error}
+          </div>
         )}
 
         {/* Таблица */}
         {subjects.length === 0 ? (
           <div style={{
             background: '#1A1A1A',
-            padding: '3rem',
+            padding: isMobile ? '2rem 1rem' : '3rem',
             borderRadius: '12px',
             border: '1px solid #2A2A2A',
             textAlign: 'center',
             color: '#A0A0A0',
           }}>
-            <p style={{ fontSize: '1.1rem', marginBottom: '1.5rem' }}>В реестре пока нет записей</p>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              marginBottom: '1rem',
+              color: '#3A3A3A',
+            }}>
+              <IconUsers />
+            </div>
+            <p style={{ fontSize: '1.1rem', marginBottom: '1.5rem' }}>
+              В реестре пока нет записей
+            </p>
+
             <button
               onClick={openAddModal}
+              disabled={limits?.is_limit_reached}
               style={{
                 padding: '0.75rem 1.5rem',
-                background: '#FF6B35',
+                background: limits?.is_limit_reached ? '#4A4A4A' : '#FF6B35',
                 color: '#FFFFFF',
                 border: 'none',
                 borderRadius: '8px',
-                cursor: 'pointer',
+                cursor: limits?.is_limit_reached ? 'not-allowed' : 'pointer',
                 fontWeight: '600',
+                width: isMobile ? '100%' : 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
               }}
             >
+              <IconPlus />
               Добавить первую запись
             </button>
           </div>
@@ -384,7 +604,9 @@ export default function RegistryPage() {
             background: '#1A1A1A',
             borderRadius: '12px',
             border: '1px solid #2A2A2A',
-            overflow: 'hidden',
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            WebkitOverflowScrolling: 'touch',
           }}>
             {/* Заголовки таблицы */}
             <div style={{
@@ -398,6 +620,7 @@ export default function RegistryPage() {
               color: '#A0A0A0',
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
+              minWidth: tableMinWidth,
             }}>
               <div>ФИО субъекта</div>
               <div>Категория</div>
@@ -417,16 +640,38 @@ export default function RegistryPage() {
                   borderBottom: '1px solid #2A2A2A',
                   alignItems: 'center',
                   transition: 'background 0.2s',
+                  minWidth: tableMinWidth,
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#1F1F1F'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                onMouseEnter={(e) => {
+                  if (!isMobile) {
+                    e.currentTarget.style.background = '#1F1F1F';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                }}
               >
-                <div>
-                  <div style={{ fontWeight: '500', color: '#FFFFFF' }}>{subject.full_name}</div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
+                    fontWeight: '500',
+                    color: '#FFFFFF',
+                    wordBreak: 'break-word',
+                  }}>
+                    {subject.full_name}
+                  </div>
+
                   {subject.data_types && (
-                    <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.25rem' }}>{subject.data_types}</div>
+                    <div style={{
+                      fontSize: '0.8rem',
+                      color: '#666',
+                      marginTop: '0.25rem',
+                      wordBreak: 'break-word',
+                    }}>
+                      {subject.data_types}
+                    </div>
                   )}
                 </div>
+
                 <div>
                   <span style={{
                     padding: '0.25rem 0.6rem',
@@ -435,19 +680,37 @@ export default function RegistryPage() {
                     borderRadius: '4px',
                     fontSize: '0.85rem',
                     fontWeight: '500',
+                    whiteSpace: 'nowrap',
                   }}>
                     {subject.category}
                   </span>
                 </div>
-                <div style={{ fontSize: '0.9rem', color: '#A0A0A0' }}>{subject.legal_basis}</div>
-                <div style={{ fontSize: '0.85rem', color: '#666' }}>
+
+                <div style={{
+                  fontSize: '0.9rem',
+                  color: '#A0A0A0',
+                  wordBreak: 'break-word',
+                }}>
+                  {subject.legal_basis}
+                </div>
+
+                <div style={{
+                  fontSize: '0.85rem',
+                  color: '#666',
+                  whiteSpace: 'nowrap',
+                }}>
                   {new Date(subject.created_at).toLocaleDateString('ru-RU')}
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+
+                <div style={{
+                  display: 'flex',
+                  gap: '0.5rem',
+                  justifyContent: 'flex-end',
+                }}>
                   <button
                     onClick={() => openEditModal(subject)}
                     style={{
-                      padding: '0.4rem 0.75rem',
+                      padding: '0.5rem 0.75rem',
                       background: 'transparent',
                       color: '#4A90E2',
                       border: '1px solid #4A90E2',
@@ -456,17 +719,28 @@ export default function RegistryPage() {
                       fontSize: '0.85rem',
                       fontWeight: '600',
                       transition: 'all 0.2s',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#4A90E2'; e.currentTarget.style.color = '#FFFFFF'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#4A90E2'; }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#4A90E2';
+                      e.currentTarget.style.color = '#FFFFFF';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = '#4A90E2';
+                    }}
                     title="Редактировать"
+                    aria-label="Редактировать"
                   >
-                    ✏️
+                    <IconEdit />
                   </button>
+
                   <button
                     onClick={() => setDeleteConfirmId(subject.id)}
                     style={{
-                      padding: '0.4rem 0.75rem',
+                      padding: '0.5rem 0.75rem',
                       background: 'transparent',
                       color: '#FF4444',
                       border: '1px solid #FF4444',
@@ -475,12 +749,22 @@ export default function RegistryPage() {
                       fontSize: '0.85rem',
                       fontWeight: '600',
                       transition: 'all 0.2s',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#FF4444'; e.currentTarget.style.color = '#FFFFFF'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#FF4444'; }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#FF4444';
+                      e.currentTarget.style.color = '#FFFFFF';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = '#FF4444';
+                    }}
                     title="Удалить"
+                    aria-label="Удалить"
                   >
-                    🗑️
+                    <IconTrash />
                   </button>
                 </div>
               </div>
@@ -492,18 +776,70 @@ export default function RegistryPage() {
       {/* МОДАЛКА ДОБАВЛЕНИЯ/РЕДАКТИРОВАНИЯ */}
       {showModal && (
         <div
-          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '2rem' }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+            padding: isMobile ? '1rem' : '2rem',
+          }}
           onClick={closeModal}
         >
           <div
-            style={{ background: '#1A1A1A', borderRadius: '12px', padding: '2rem', maxWidth: '600px', width: '100%', maxHeight: '90vh', overflowY: 'auto', border: '1px solid #2A2A2A' }}
+            style={{
+              background: '#1A1A1A',
+              borderRadius: '12px',
+              padding: isMobile ? '1.5rem' : '2rem',
+              maxWidth: '600px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              border: '1px solid #2A2A2A',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '700', color: '#FFFFFF' }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              gap: '1rem',
+              marginBottom: '1.5rem',
+            }}>
+              <h2 style={{
+                margin: 0,
+                fontSize: isMobile ? '1.25rem' : '1.5rem',
+                fontWeight: '700',
+                color: '#FFFFFF',
+                lineHeight: 1.25,
+              }}>
                 {editingSubject ? 'Редактировать запись' : 'Новая запись в реестре'}
               </h2>
-              <button onClick={closeModal} style={{ background: 'transparent', border: 'none', color: '#A0A0A0', fontSize: '1.5rem', cursor: 'pointer' }}>✕</button>
+
+              <button
+                onClick={closeModal}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#A0A0A0',
+                  cursor: 'pointer',
+                  lineHeight: 1,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0.25rem',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#FF4444'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = '#A0A0A0'; }}
+                aria-label="Закрыть"
+              >
+                <IconClose />
+              </button>
             </div>
 
             {modalError && (
@@ -515,12 +851,21 @@ export default function RegistryPage() {
                 color: '#FF4444',
                 marginBottom: '1rem',
                 fontSize: '0.9rem',
-              }}>{modalError}</div>
+                lineHeight: 1.4,
+              }}>
+                {modalError}
+              </div>
             )}
 
             <div style={{ display: 'grid', gap: '1rem' }}>
               <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', color: '#FFFFFF', fontWeight: '500', fontSize: '0.9rem' }}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  color: '#FFFFFF',
+                  fontWeight: '500',
+                  fontSize: '0.9rem',
+                }}>
                   ФИО субъекта *
                 </label>
                 <input
@@ -530,13 +875,20 @@ export default function RegistryPage() {
                   onChange={handleFormChange}
                   style={inputStyle}
                   placeholder="Иванов Иван Иванович"
+                  disabled={limits?.is_limit_reached && !editingSubject}
                   onFocus={(e) => { e.target.style.borderColor = '#FF6B35'; }}
                   onBlur={(e) => { e.target.style.borderColor = '#2A2A2A'; }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', color: '#FFFFFF', fontWeight: '500', fontSize: '0.9rem' }}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  color: '#FFFFFF',
+                  fontWeight: '500',
+                  fontSize: '0.9rem',
+                }}>
                   Категория *
                 </label>
                 <select
@@ -544,14 +896,23 @@ export default function RegistryPage() {
                   value={formData.category}
                   onChange={handleFormChange}
                   style={inputStyle}
+                  disabled={limits?.is_limit_reached && !editingSubject}
                 >
                   <option value="">-- Выберите категорию --</option>
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  {CATEGORIES.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', color: '#FFFFFF', fontWeight: '500', fontSize: '0.9rem' }}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  color: '#FFFFFF',
+                  fontWeight: '500',
+                  fontSize: '0.9rem',
+                }}>
                   Основание обработки *
                 </label>
                 <select
@@ -559,14 +920,23 @@ export default function RegistryPage() {
                   value={formData.legal_basis}
                   onChange={handleFormChange}
                   style={inputStyle}
+                  disabled={limits?.is_limit_reached && !editingSubject}
                 >
                   <option value="">-- Выберите основание --</option>
-                  {LEGAL_BASES.map(l => <option key={l} value={l}>{l}</option>)}
+                  {LEGAL_BASES.map(l => (
+                    <option key={l} value={l}>{l}</option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', color: '#FFFFFF', fontWeight: '500', fontSize: '0.9rem' }}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  color: '#FFFFFF',
+                  fontWeight: '500',
+                  fontSize: '0.9rem',
+                }}>
                   Какие данные обрабатываются
                 </label>
                 <textarea
@@ -576,30 +946,37 @@ export default function RegistryPage() {
                   rows={3}
                   style={{ ...inputStyle, resize: 'vertical' }}
                   placeholder="ФИО, паспортные данные, телефон, email..."
+                  disabled={limits?.is_limit_reached && !editingSubject}
                   onFocus={(e) => { e.target.style.borderColor = '#FF6B35'; }}
                   onBlur={(e) => { e.target.style.borderColor = '#2A2A2A'; }}
                 />
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+            <div style={{
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: '0.75rem',
+              marginTop: '1.5rem',
+            }}>
               <button
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || (limits?.is_limit_reached && !editingSubject)}
                 style={{
                   flex: 1,
                   padding: '0.875rem',
-                  background: saving ? '#4A4A4A' : '#FF6B35',
+                  background: saving || (limits?.is_limit_reached && !editingSubject) ? '#4A4A4A' : '#FF6B35',
                   color: '#FFFFFF',
                   border: 'none',
                   borderRadius: '8px',
                   fontSize: '1rem',
                   fontWeight: '600',
-                  cursor: saving ? 'not-allowed' : 'pointer',
+                  cursor: saving || (limits?.is_limit_reached && !editingSubject) ? 'not-allowed' : 'pointer',
                 }}
               >
                 {saving ? 'Сохранение...' : 'Сохранить'}
               </button>
+
               <button
                 onClick={closeModal}
                 disabled={saving}
@@ -625,30 +1002,96 @@ export default function RegistryPage() {
       {/* МОДАЛКА ПОДТВЕРЖДЕНИЯ УДАЛЕНИЯ */}
       {deleteConfirmId !== null && (
         <div
-          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '2rem' }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+            padding: isMobile ? '1rem' : '2rem',
+          }}
           onClick={() => setDeleteConfirmId(null)}
         >
           <div
-            style={{ background: '#1A1A1A', borderRadius: '12px', padding: '2rem', maxWidth: '450px', width: '100%', border: '1px solid #FF4444' }}
+            style={{
+              background: '#1A1A1A',
+              borderRadius: '12px',
+              padding: isMobile ? '1.5rem' : '2rem',
+              maxWidth: '450px',
+              width: '100%',
+              border: '1px solid #FF4444',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
-              <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.5rem', fontWeight: '700', color: '#FFFFFF' }}>Удалить запись?</h2>
-              <p style={{ margin: 0, color: '#A0A0A0', fontSize: '0.95rem' }}>Это действие нельзя отменить.</p>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                marginBottom: '1rem',
+                color: '#FF4444',
+              }}>
+                <IconAlert />
+              </div>
+              <h2 style={{
+                margin: '0 0 0.5rem',
+                fontSize: isMobile ? '1.25rem' : '1.5rem',
+                fontWeight: '700',
+                color: '#FFFFFF',
+              }}>
+                Удалить запись?
+              </h2>
+              <p style={{
+                margin: 0,
+                color: '#A0A0A0',
+                fontSize: '0.95rem',
+                lineHeight: 1.4,
+              }}>
+                Это действие нельзя отменить.
+              </p>
             </div>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
+
+            <div style={{
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: '0.75rem',
+            }}>
               <button
                 onClick={() => setDeleteConfirmId(null)}
                 disabled={deleting}
-                style={{ flex: 1, padding: '0.875rem', background: '#2A2A2A', color: '#FFFFFF', border: '1px solid #3A3A3A', borderRadius: '8px', fontSize: '1rem', fontWeight: '600', cursor: deleting ? 'not-allowed' : 'pointer' }}
+                style={{
+                  flex: 1,
+                  padding: '0.875rem',
+                  background: '#2A2A2A',
+                  color: '#FFFFFF',
+                  border: '1px solid #3A3A3A',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                }}
               >
                 Отмена
               </button>
+
               <button
                 onClick={confirmDelete}
                 disabled={deleting}
-                style={{ flex: 1, padding: '0.875rem', background: deleting ? '#4A4A4A' : '#FF4444', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '1rem', fontWeight: '600', cursor: deleting ? 'not-allowed' : 'pointer' }}
+                style={{
+                  flex: 1,
+                  padding: '0.875rem',
+                  background: deleting ? '#4A4A4A' : '#FF4444',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                }}
               >
                 {deleting ? 'Удаление...' : 'Да, удалить'}
               </button>
