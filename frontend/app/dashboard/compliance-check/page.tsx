@@ -12,6 +12,7 @@ import {
   IconXCircle,
   IconAlert,
 } from '../../../components/icons';
+import { useToast } from '../../../contexts/ToastContext';
 
 interface ComplianceCheck {
   name: string;
@@ -42,10 +43,10 @@ export default function ComplianceCheckPage() {
   const [customUrl, setCustomUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ComplianceResult | null>(null);
-  const [error, setError] = useState('');
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMobile = useIsMobile();
+  const toast = useToast();
 
   useEffect(() => {
     const urlParam = searchParams.get('url');
@@ -77,21 +78,20 @@ export default function ComplianceCheckPage() {
         const data = await res.json();
         setTenants(data);
       } catch (err: any) {
-        setError(err.message);
+        toast.error(err.message);
       }
     };
 
     fetchTenants();
-  }, [router]);
+  }, [router, toast]);
 
   const checkWebsite = async (urlToCheck: string) => {
     if (!urlToCheck) {
-      setError('Введите URL сайта или выберите компанию');
+      toast.warning('Введите URL сайта или выберите компанию');
       return;
     }
 
     setLoading(true);
-    setError('');
     setResult(null);
 
     try {
@@ -113,7 +113,7 @@ export default function ComplianceCheckPage() {
       const data = await res.json();
       setResult(data);
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -130,7 +130,7 @@ export default function ComplianceCheckPage() {
     }
 
     if (!urlToCheck) {
-      setError('Введите URL сайта или выберите компанию');
+      toast.warning('Введите URL сайта или выберите компанию');
       return;
     }
 
@@ -281,20 +281,6 @@ export default function ComplianceCheckPage() {
               }}
             />
           </div>
-
-          {error && (
-            <div style={{
-              padding: '1rem',
-              background: 'rgba(255, 68, 68, 0.1)',
-              border: '1px solid #FF4444',
-              borderRadius: '8px',
-              color: '#FF4444',
-              marginBottom: '1.5rem',
-              fontSize: '0.95rem',
-            }}>
-              {error}
-            </div>
-          )}
 
           <button
             onClick={handleCheck}
