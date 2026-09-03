@@ -131,7 +131,7 @@ class DocumentGenerator:
         return buffer.getvalue()
 
     # =========================================================================
-    # КАРТА ОБРАБОТКИ ПДн: БЕЗОПАСНАЯ ТАБЛИЦА ИС (PDF)
+    # БЕЗОПАСНЫЕ ПРИМИТИВЫ ДЛЯ КАРТЫ (без multi_cell — без исключений fpdf2)
     # =========================================================================
     def _wrap_text(self, pdf, text, max_width):
         """Переносит текст по словам; слишком длинные слова режет по символам."""
@@ -159,9 +159,15 @@ class DocumentGenerator:
                     lines.append(word)
         return lines
 
+    def _write_wrapped(self, pdf, text, line_h, align='L'):
+        """Вывод текста с переносом через cell() — не может упасть с FPDFException."""
+        usable = pdf.w - pdf.l_margin - pdf.r_margin
+        for raw_line in str(text).split('\n'):
+            for line in self._wrap_text(pdf, raw_line, usable):
+                pdf.cell(0, line_h, line, align=align, new_x="LMARGIN", new_y="NEXT")
+
     def _render_data_map_table(self, pdf, headers, rows, col_widths):
-        """Рисует таблицу без multi_cell: текст выводится через pdf.text(),
-        который не проверяет ширину и не может упасть с FPDFException."""
+        """Таблица ИС: текст выводится через pdf.text() — без проверки ширины."""
         line_h = 4.5
         pad = 1.5
         x0 = 10  # левое поле FPDF по умолчанию
@@ -207,7 +213,7 @@ class DocumentGenerator:
                 x += w
                 pdf.line(x, y, x, y + row_h)
 
-            # Текст ячеек (без проверки ширины — не может упасть)
+            # Текст ячеек
             x = x0
             for i, lines in enumerate(wrapped):
                 for li, ln in enumerate(lines):
@@ -227,7 +233,8 @@ class DocumentGenerator:
 
         # Шапка документа
         pdf.set_font('Roboto', 'B', 14)
-        pdf.multi_cell(0, 8, f"КАРТА ОБРАБОТКИ ПЕРСОНАЛЬНЫХ ДАННЫХ\n{name}", align='C')
+        self._write_wrapped(pdf, "КАРТА ОБРАБОТКИ ПЕРСОНАЛЬНЫХ ДАННЫХ", 8, align='C')
+        self._write_wrapped(pdf, name, 8, align='C')
         pdf.ln(2)
 
         pdf.set_font('Roboto', '', 10)
@@ -235,19 +242,23 @@ class DocumentGenerator:
         pdf.cell(0, 6, f"Дата формирования: {today}", align='R', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
 
-        pdf.set_font('Roboto', '', 10)
-        pdf.multi_cell(0, 6, f"Оператор: {name} (ИНН: {inn})")
-        pdf.multi_cell(
-            0, 6,
+        self._write_wrapped(pdf, f"Оператор: {name} (ИНН: {inn})", 6)
+        self._write_wrapped(
+            pdf,
             "Настоящий документ определяет информационные системы (ИС), в которых оператором "
             "обрабатываются персональные данные, и составлен в соответствии с требованиями "
-            "Федерального закона от 27.07.2006 № 152-ФЗ «О персональных данных»."
+            "Федерального закона от 27.07.2006 № 152-ФЗ «О персональных данных».",
+            6,
         )
         pdf.ln(4)
 
         if not data_systems:
             pdf.set_font('Roboto', '', 11)
-            pdf.multi_cell(0, 6, "На дату формирования документа информационные системы, обрабатывающие персональные данные, у оператора не зарегистрированы.")
+            self._write_wrapped(
+                pdf,
+                "На дату формирования документа информационные системы, обрабатывающие персональные данные, у оператора не зарегистрированы.",
+                6,
+            )
         else:
             headers = ["№", "Информационная система", "Категории субъектов", "Локация данных", "Ответственный", "Субъектов"]
             col_widths = [8, 50, 38, 42, 40, 12]
@@ -282,21 +293,22 @@ class DocumentGenerator:
 
             pdf.ln(4)
             pdf.set_font('Roboto', 'B', 10)
-            pdf.multi_cell(
-                0, 6,
+            self._write_wrapped(
+                pdf,
                 f"Итого информационных систем: {len(data_systems)}. "
-                f"Всего субъектов ПДн в системах: {total_subjects}."
+                f"Всего субъектов ПДн в системах: {total_subjects}.",
+                6,
             )
 
         # Блок подписи
         pdf.ln(6)
         pdf.set_font('Roboto', '', 11)
-        pdf.multi_cell(0, 6, "Ответственный за организацию обработки персональных данных:")
+        self._write_wrapped(pdf, "Ответственный за организацию обработки персональных данных:", 6)
         pdf.ln(4)
-        pdf.multi_cell(0, 6, "_________________ / _________________________________")
-        pdf.multi_cell(0, 6, "(подпись)                          (расшифровка подписи)")
+        pdf.cell(0, 6, "_________________ / _________________________________", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, "(подпись)                          (расшифровка подписи)", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
-        pdf.multi_cell(0, 6, "Дата: «___» _______________ 20___ г.")
+        pdf.cell(0, 6, "Дата: «___» _______________ 20___ г.", new_x="LMARGIN", new_y="NEXT")
 
         return pdf.output()
 
