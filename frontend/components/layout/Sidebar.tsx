@@ -49,7 +49,7 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    router.push('/');
+    router.push('/login');
   };
 
   // Смена компании в селекторе

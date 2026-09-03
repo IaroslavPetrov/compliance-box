@@ -63,7 +63,7 @@ export default function ComplianceCheckPage() {
       try {
         const token = localStorage.getItem('token');
         if (!token) {
-          router.push('/');
+          router.push('/login');
           return;
         }
 

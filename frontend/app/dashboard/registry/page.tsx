@@ -110,7 +110,7 @@ export default function RegistryPage() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        router.push('/');
+        router.push('/login');
         return;
       }
 

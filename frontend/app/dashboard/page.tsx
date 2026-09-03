@@ -56,7 +56,7 @@ export default function DashboardPage() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        router.push('/');
+        router.push('/login');
         return;
       }
 
@@ -66,7 +66,7 @@ export default function DashboardPage() {
 
       if (!userRes.ok) {
         localStorage.removeItem('token');
-        router.push('/');
+        router.push('/login');
         return;
       }
 
