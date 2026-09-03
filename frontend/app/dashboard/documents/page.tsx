@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import {
-  IconArrowLeft,
   IconFileText,
   IconClock,
 } from '../../../components/icons';
@@ -13,7 +12,6 @@ import posthog from '../../../contexts/posthog';
 
 export default function DocumentsPage() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const tenantId = searchParams.get('tenantId') || '1';
   const isMobile = useIsMobile();
   const toast = useToast();
@@ -120,13 +118,8 @@ export default function DocumentsPage() {
     }}>
       <div style={{ maxWidth: '900px', margin: '0 auto' }}>
         
-        {/* Шапка с навигацией */}
+        {/* Шапка */}
         <div style={{
-          display: 'flex',
-          flexDirection: isMobile ? 'column' : 'row',
-          justifyContent: 'space-between',
-          alignItems: isMobile ? 'stretch' : 'center',
-          gap: '1rem',
           marginBottom: '2rem',
         }}>
           <h1 style={{
@@ -138,37 +131,6 @@ export default function DocumentsPage() {
           }}>
             Документы для компании <span style={{ color: '#FF6B35' }}>(ID: {tenantId})</span>
           </h1>
-          <button
-            onClick={() => router.push('/dashboard')}
-            style={{
-              padding: '0.75rem 1.5rem',
-              background: 'transparent',
-              color: '#A0A0A0',
-              border: '1px solid #2A2A2A',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: '600',
-              fontSize: '0.95rem',
-              transition: 'all 0.3s',
-              width: isMobile ? '100%' : 'auto',
-              whiteSpace: 'nowrap',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#FF6B35';
-              e.currentTarget.style.color = '#FF6B35';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#2A2A2A';
-              e.currentTarget.style.color = '#A0A0A0';
-            }}
-          >
-            <IconArrowLeft />
-            Назад в личный кабинет
-          </button>
         </div>
 
         {/* Список документов */}

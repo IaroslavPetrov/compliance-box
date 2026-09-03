@@ -10,7 +10,6 @@ import {
   IconEdit,
   IconTrash,
   IconPlus,
-  IconLogout,
 } from '../../components/icons';
 import { useToast } from '../../contexts/ToastContext';
 import posthog from '../../contexts/posthog';
@@ -94,11 +93,6 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    router.push('/');
-  };
 
   const handleAddCompany = () => {
     posthog.capture('add_company_clicked');
@@ -243,36 +237,6 @@ export default function DashboardPage() {
             >
               <IconSearch />
               Проверка сайта
-            </button>
-            <button
-              onClick={handleLogout}
-              style={{
-                padding: '0.75rem 1.5rem',
-                background: 'transparent',
-                color: '#FF4444',
-                border: '1px solid #FF4444',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '0.95rem',
-                transition: 'all 0.3s',
-                width: isMobile ? '100%' : 'auto',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#FF4444';
-                e.currentTarget.style.color = '#FFFFFF';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.color = '#FF4444';
-              }}
-            >
-              <IconLogout />
-              Выйти
             </button>
           </div>
         </div>

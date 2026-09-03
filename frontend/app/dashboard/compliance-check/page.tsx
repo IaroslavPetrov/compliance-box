@@ -6,7 +6,6 @@ import { useIsMobile } from '../../../hooks/useIsMobile';
 import {
   IconSearch,
   IconShield,
-  IconArrowLeft,
   IconClipboard,
   IconCheckCircle,
   IconXCircle,
@@ -175,38 +174,6 @@ export default function ComplianceCheckPage() {
         
         {/* Шапка */}
         <div style={{ marginBottom: '2rem' }}>
-          <button
-            onClick={() => router.push('/dashboard')}
-            style={{
-              padding: '0.75rem 1.5rem',
-              background: 'transparent',
-              color: '#A0A0A0',
-              border: '1px solid #2A2A2A',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: '600',
-              fontSize: '0.95rem',
-              transition: 'all 0.3s',
-              marginBottom: '1.5rem',
-              width: isMobile ? '100%' : 'auto',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#FF6B35';
-              e.currentTarget.style.color = '#FF6B35';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#2A2A2A';
-              e.currentTarget.style.color = '#A0A0A0';
-            }}
-          >
-            <IconArrowLeft />
-            Назад в личный кабинет
-          </button>
-          
           <h1 style={{
             margin: 0,
             fontSize: isMobile ? '1.5rem' : '2rem',
