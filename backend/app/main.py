@@ -261,6 +261,32 @@ def _serialize_data_systems_to_response(subject):
         cats = []
     return cats
 
+# ⚠️ ВАЖНО: статический роут /limits ДОЛЖЕН идти ДО динамических {subject_id}
+@app.get("/api/v1/pd-subjects/limits")
+def get_pd_subjects_limits(
+    tenant_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    tenant = db.query(models.Tenant).filter(
+        models.Tenant.id == tenant_id,
+        models.Tenant.user_id == current_user.id
+    ).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+
+    current_count = db.query(models.PdSubject).filter(
+        models.PdSubject.tenant_id == tenant_id,
+        models.PdSubject.user_id == current_user.id
+    ).count()
+
+    return {
+        "current": current_count,
+        "limit": FREE_TIER_LIMIT,
+        "tariff": "Free",
+        "is_limit_reached": current_count >= FREE_TIER_LIMIT
+    }
+
 @app.get("/api/v1/pd-subjects/", response_model=List[PdSubjectResponse])
 def get_pd_subjects(
     tenant_id: int,
@@ -392,31 +418,6 @@ def delete_pd_subject(
     db.commit()
     return {"message": "Запись из реестра удалена"}
 
-@app.get("/api/v1/pd-subjects/limits")
-def get_pd_subjects_limits(
-    tenant_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    tenant = db.query(models.Tenant).filter(
-        models.Tenant.id == tenant_id,
-        models.Tenant.user_id == current_user.id
-    ).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Компания не найдена")
-
-    current_count = db.query(models.PdSubject).filter(
-        models.PdSubject.tenant_id == tenant_id,
-        models.PdSubject.user_id == current_user.id
-    ).count()
-
-    return {
-        "current": current_count,
-        "limit": FREE_TIER_LIMIT,
-        "tariff": "Free",
-        "is_limit_reached": current_count >= FREE_TIER_LIMIT
-    }
-
 # ============================================================================
 # DATA SYSTEMS (КАРТА ОБРАБОТКИ ПДн) — НОВАЯ СУЩНОСТЬ
 # ============================================================================
@@ -443,6 +444,33 @@ def _data_system_to_response(ds: models.DataSystem) -> DataSystemResponse:
         tenant_id=ds.tenant_id,
         user_id=ds.user_id,
         pd_subjects_count=len(ds.pd_subjects) if ds.pd_subjects else 0,
+    )
+
+# ⚠️ ВАЖНО: статический роут /limits ДОЛЖЕН идти ДО динамических {system_id}
+@app.get("/api/v1/data-systems/limits", response_model=DataSystemLimitsResponse)
+def get_data_systems_limits(
+    tenant_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    tenant = db.query(models.Tenant).filter(
+        models.Tenant.id == tenant_id,
+        models.Tenant.user_id == current_user.id
+    ).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+
+    current_count = db.query(models.DataSystem).filter(
+        models.DataSystem.tenant_id == tenant_id,
+        models.DataSystem.user_id == current_user.id,
+        models.DataSystem.is_active == True
+    ).count()
+
+    return DataSystemLimitsResponse(
+        current=current_count,
+        limit=DATA_SYSTEM_FREE_TIER_LIMIT,
+        tariff="Free",
+        is_limit_reached=current_count >= DATA_SYSTEM_FREE_TIER_LIMIT,
     )
 
 @app.get("/api/v1/data-systems/", response_model=List[DataSystemResponse])
@@ -596,32 +624,6 @@ def delete_data_system(
     db_ds.updated_at = datetime.now(timezone.utc)
     db.commit()
     return {"message": "Информационная система удалена"}
-
-@app.get("/api/v1/data-systems/limits", response_model=DataSystemLimitsResponse)
-def get_data_systems_limits(
-    tenant_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    tenant = db.query(models.Tenant).filter(
-        models.Tenant.id == tenant_id,
-        models.Tenant.user_id == current_user.id
-    ).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Компания не найдена")
-
-    current_count = db.query(models.DataSystem).filter(
-        models.DataSystem.tenant_id == tenant_id,
-        models.DataSystem.user_id == current_user.id,
-        models.DataSystem.is_active == True
-    ).count()
-
-    return DataSystemLimitsResponse(
-        current=current_count,
-        limit=DATA_SYSTEM_FREE_TIER_LIMIT,
-        tariff="Free",
-        is_limit_reached=current_count >= DATA_SYSTEM_FREE_TIER_LIMIT,
-    )
 
 # ============================================================================
 # ПРИВЯЗКА СУБЪЕКТА ПДн К ИНФОРМАЦИОННЫМ СИСТЕМАМ
