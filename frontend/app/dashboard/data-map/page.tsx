@@ -13,6 +13,7 @@ import {
   IconAlert,
   IconClose,
   IconUsers,
+  IconFileText,
 } from '../../../components/icons';
 
 const API = 'https://compliance-box-backend.onrender.com/api/v1';
@@ -86,6 +87,7 @@ export default function DataMapPage() {
   const [editingSystem, setEditingSystem] = useState<DataSystem | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -161,6 +163,56 @@ export default function DataMapPage() {
         ? prev.categories.filter((c) => c !== value)
         : [...prev.categories, value],
     }));
+  };
+
+  const handleExportPdf = async () => {
+    if (!currentTenant) return;
+    setExporting(true);
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `${API}/data-systems/export/pdf?tenant_id=${currentTenant.id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        }
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Ошибка экспорта: ${res.status} - ${errText}`);
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `data_map_${currentTenant.inn || currentTenant.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+
+      posthog.capture('data_map_exported', {
+        tenant_id: currentTenant.id,
+        systems_count: systems.length,
+      });
+      toast.success('Карта обработки ПДн скачана (PDF)');
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        toast.warning('Превышено время ожидания (60 сек). Попробуйте ещё раз.');
+      } else {
+        toast.error(err.message);
+      }
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleSave = async () => {
@@ -276,7 +328,7 @@ export default function DataMapPage() {
               {currentTenant.name} · Реестр информационных систем
             </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexDirection: isMobile ? 'column' : 'row' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexDirection: isMobile ? 'column' : 'row', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             {limits && (
               <span style={{
                 padding: '0.5rem 0.9rem',
@@ -290,6 +342,43 @@ export default function DataMapPage() {
               }}>
                 ИС: {limits.current} / {limits.limit} · {limits.tariff}
               </span>
+            )}
+            {systems.length > 0 && (
+              <button
+                onClick={handleExportPdf}
+                disabled={exporting}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  background: exporting ? '#4A4A4A' : 'transparent',
+                  color: exporting ? '#A0A0A0' : '#00C853',
+                  border: '1px solid #00C853',
+                  borderRadius: '8px',
+                  cursor: exporting ? 'not-allowed' : 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.95rem',
+                  transition: 'all 0.3s',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  width: isMobile ? '100%' : 'auto',
+                }}
+                onMouseEnter={(e) => {
+                  if (!exporting) {
+                    e.currentTarget.style.background = '#00C853';
+                    e.currentTarget.style.color = '#FFFFFF';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!exporting) {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = '#00C853';
+                  }
+                }}
+              >
+                <IconFileText size={14} />
+                {exporting ? 'Генерация...' : 'Скачать для РКН'}
+              </button>
             )}
             <button
               onClick={openAdd}
