@@ -131,63 +131,90 @@ class DocumentGenerator:
         return buffer.getvalue()
 
     # =========================================================================
-    # КАРТА ОБРАБОТКИ ПДн: ТАБЛИЦА ИС (PDF)
+    # КАРТА ОБРАБОТКИ ПДн: БЕЗОПАСНАЯ ТАБЛИЦА ИС (PDF)
     # =========================================================================
+    def _wrap_text(self, pdf, text, max_width):
+        """Переносит текст по словам; слишком длинные слова режет по символам."""
+        text = str(text) if text is not None else ''
+        if text == '':
+            return ['']
+
+        lines = []
+        for word in text.split(' '):
+            # если слово шире колонки — режем по символам
+            while pdf.get_string_width(word) > max_width and len(word) > 1:
+                cut = len(word) - 1
+                while cut > 1 and pdf.get_string_width(word[:cut]) > max_width:
+                    cut -= 1
+                lines.append(word[:cut])
+                word = word[cut:]
+
+            if not lines:
+                lines.append(word)
+            else:
+                candidate = f"{lines[-1]} {word}"
+                if pdf.get_string_width(candidate) <= max_width:
+                    lines[-1] = candidate
+                else:
+                    lines.append(word)
+        return lines
+
     def _render_data_map_table(self, pdf, headers, rows, col_widths):
-        line_h = 5
+        """Рисует таблицу без multi_cell: текст выводится через pdf.text(),
+        который не проверяет ширину и не может упасть с FPDFException."""
+        line_h = 4.5
+        pad = 1.5
         x0 = 10  # левое поле FPDF по умолчанию
         total_w = sum(col_widths)
 
-        # Шапка таблицы
-        pdf.set_font('Roboto', 'B', 8)
-        pdf.set_fill_color(230, 230, 230)
-        y0 = pdf.get_y()
-        x = x0
-        for i, h in enumerate(headers):
-            pdf.set_xy(x, y0)
-            pdf.cell(col_widths[i], 8, h, border=1, fill=True, align='C')
-            x += col_widths[i]
-        pdf.set_xy(x0, y0 + 8)
+        def draw_header():
+            pdf.set_font('Roboto', 'B', 8)
+            pdf.set_fill_color(230, 230, 230)
+            y = pdf.get_y()
+            x = x0
+            for i, h in enumerate(headers):
+                pdf.rect(x, y, col_widths[i], 8, 'DF')
+                pdf.set_xy(x, y + 2.5)
+                pdf.cell(col_widths[i], 3, h, border=0, align='C')
+                x += col_widths[i]
+            pdf.set_xy(x0, y + 8)
 
-        # Строки данных
+        draw_header()
+
         pdf.set_font('Roboto', '', 8)
         for row in rows:
-            # Высота строки = максимум строк текста в ячейках
+            # Перенос текста по колонкам
+            wrapped = []
             max_lines = 1
             for i, text in enumerate(row):
-                text_w = pdf.get_string_width(str(text))
-                lines = int(text_w / (col_widths[i] - 3)) + 1
-                max_lines = max(max_lines, lines)
-            row_h = max_lines * line_h + 2
+                lines = self._wrap_text(pdf, text, col_widths[i] - 2 * pad)
+                wrapped.append(lines)
+                max_lines = max(max_lines, len(lines))
+            row_h = max_lines * line_h + 2 * pad
 
             # Перенос на новую страницу, если строка не помещается
             if pdf.get_y() + row_h > 285:
                 pdf.add_page()
-                y0 = pdf.get_y()
-                x = x0
-                pdf.set_font('Roboto', 'B', 8)
-                pdf.set_fill_color(230, 230, 230)
-                for i, h in enumerate(headers):
-                    pdf.set_xy(x, y0)
-                    pdf.cell(col_widths[i], 8, h, border=1, fill=True, align='C')
-                    x += col_widths[i]
-                pdf.set_xy(x0, y0 + 8)
+                draw_header()
                 pdf.set_font('Roboto', '', 8)
 
-            y0 = pdf.get_y()
-            x = x0
-            for i, text in enumerate(row):
-                pdf.set_xy(x + 1, y0 + 1)
-                pdf.multi_cell(col_widths[i] - 2, line_h, str(text), border=0, align='L')
-                x += col_widths[i]
+            y = pdf.get_y()
 
             # Рамка строки и вертикальные разделители
-            pdf.rect(x0, y0, total_w, row_h)
+            pdf.rect(x0, y, total_w, row_h)
             x = x0
             for w in col_widths[:-1]:
                 x += w
-                pdf.line(x, y0, x, y0 + row_h)
-            pdf.set_xy(x0, y0 + row_h)
+                pdf.line(x, y, x, y + row_h)
+
+            # Текст ячеек (без проверки ширины — не может упасть)
+            x = x0
+            for i, lines in enumerate(wrapped):
+                for li, ln in enumerate(lines):
+                    pdf.text(x + pad, y + pad + line_h * (li + 0.8), ln)
+                x += col_widths[i]
+
+            pdf.set_xy(x0, y + row_h)
 
     def generate_data_map_pdf(self, company_data: dict, data_systems: list) -> bytes:
         name = company_data.get('name', 'Организация')
