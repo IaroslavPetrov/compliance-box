@@ -52,6 +52,25 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
     router.push('/');
   };
 
+  // Смена компании в селекторе
+  const handleTenantChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const id = Number(e.target.value);
+    const t = tenants.find((x) => x.id === id);
+    if (!t) return;
+
+    selectTenant(t);
+
+    // Если открыта страница, привязанная к компании — синхронизируем URL
+    if (
+      pathname.startsWith('/dashboard/registry') ||
+      pathname.startsWith('/dashboard/documents')
+    ) {
+      router.replace(`${pathname}?tenantId=${t.id}`);
+    }
+
+    onClose();
+  };
+
   const content = (
     <div style={{
       display: 'flex',
@@ -89,11 +108,7 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
         </label>
         <select
           value={currentTenant?.id ?? ''}
-          onChange={(e) => {
-            const id = Number(e.target.value);
-            const t = tenants.find((x) => x.id === id);
-            if (t) selectTenant(t);
-          }}
+          onChange={handleTenantChange}
           style={{
             width: '100%',
             padding: '0.6rem 0.75rem',
