@@ -12,6 +12,7 @@ import {
   IconLogout,
   IconPlus,
   IconShield,
+  IconClipboard,
 } from '../icons';
 
 type IconComponent = React.ComponentType<{ size?: number; strokeWidth?: number }>;
@@ -40,6 +41,7 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
     { href: '/dashboard', label: 'Личный кабинет', icon: IconHome, exact: true },
     { href: '/dashboard/data-map', label: 'Карта обработки ПДн', icon: IconMap },
     { href: tenantId ? `/dashboard/registry?tenantId=${tenantId}` : '/dashboard/registry', label: 'Реестр ПДн', icon: IconUsers },
+    { href: tenantId ? `/dashboard/subject-requests?tenantId=${tenantId}` : '/dashboard/subject-requests', label: 'Запросы субъектов', icon: IconClipboard },
     { href: tenantId ? `/dashboard/documents?tenantId=${tenantId}` : '/dashboard/documents', label: 'Документы', icon: IconFileText },
     { href: '/dashboard/compliance-check', label: 'Проверка сайта', icon: IconSearch },
   ];
@@ -63,7 +65,8 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
     // Если открыта страница, привязанная к компании — синхронизируем URL
     if (
       pathname.startsWith('/dashboard/registry') ||
-      pathname.startsWith('/dashboard/documents')
+      pathname.startsWith('/dashboard/documents') ||
+      pathname.startsWith('/dashboard/subject-requests')
     ) {
       router.replace(`${pathname}?tenantId=${t.id}`);
     }
