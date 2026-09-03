@@ -15,6 +15,7 @@ from app.schemas import (
     DocumentHistoryCreate, DocumentHistoryResponse,
     PdSubjectCreate, PdSubjectResponse, PdSubjectUpdate,
     DataSystemCreate, DataSystemUpdate, DataSystemResponse, DataSystemLimitsResponse,
+    SubjectRequestCreate, SubjectRequestResponse, SubjectRequestUpdate,
 )
 from app.services.document_generator import document_generator
 
@@ -34,7 +35,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 # ============================================================================
 # APP INIT
 # ============================================================================
-# Создаём все таблицы (включая новые: data_systems, pd_subject_data_systems)
+# Создаём все таблицы (включая новые: data_systems, pd_subject_data_systems, subject_requests)
 models.Base.metadata.create_all(bind=engine)
 
 # Принудительно создаём таблицу pd_subjects, если её нет
@@ -730,6 +731,270 @@ def set_subject_data_systems(
         "message": "Связи обновлены",
         "data_system_ids": [ds.id for ds in db_subject.data_systems]
     }
+
+# ============================================================================
+# SUBJECT REQUESTS (ЗАПРОСЫ СУБЪЕКТОВ ПДн — киллер-фича)
+# ============================================================================
+SUBJECT_REQUEST_FREE_TIER_LIMIT = 1  # Free: 1 запрос (Pro=10, Business=безлимит)
+
+ALLOWED_REQUEST_TYPES = {'information', 'clarification', 'destruction', 'withdrawal'}
+
+
+def _calculate_deadline(received_at: datetime, business_days: int = 10) -> datetime:
+    """Рассчитывает дедлайн ответа: +10 рабочих дней (по ст. 20 152-ФЗ)."""
+    current = received_at.replace(tzinfo=None) if received_at.tzinfo else received_at
+    added = 0
+    while added < business_days:
+        current += timedelta(days=1)
+        if current.weekday() < 5:  # Пн-Пт
+            added += 1
+    return current
+
+
+def _subject_request_to_response(sr: models.SubjectRequest) -> SubjectRequestResponse:
+    """Конвертирует ORM-модель SubjectRequest в Pydantic-ответ с вычисляемыми полями."""
+    linked_subject_name = None
+    linked_data_systems: List[str] = []
+
+    if sr.linked_subject:
+        linked_subject_name = sr.linked_subject.full_name
+        # Подтягиваем названия ИС, где хранятся данные субъекта
+        for ds in sr.linked_subject.data_systems:
+            if ds.is_active:
+                linked_data_systems.append(ds.name)
+
+    return SubjectRequestResponse(
+        id=sr.id,
+        subject_name=sr.subject_name,
+        request_type=sr.request_type,
+        received_at=sr.received_at,
+        deadline=sr.deadline,
+        status=sr.status,
+        response_generated_at=sr.response_generated_at,
+        linked_subject_id=sr.linked_subject_id,
+        linked_subject_name=linked_subject_name,
+        linked_data_systems=linked_data_systems,
+        tenant_id=sr.tenant_id,
+        user_id=sr.user_id,
+        created_at=sr.created_at,
+    )
+
+
+# ⚠️ ВАЖНО: статические роуты /limits ДОЛЖНЫ идти ДО динамических {request_id}
+@app.get("/api/v1/subject-requests/limits")
+def get_subject_requests_limits(
+    tenant_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    tenant = db.query(models.Tenant).filter(
+        models.Tenant.id == tenant_id,
+        models.Tenant.user_id == current_user.id
+    ).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+
+    current_count = db.query(models.SubjectRequest).filter(
+        models.SubjectRequest.tenant_id == tenant_id,
+        models.SubjectRequest.user_id == current_user.id
+    ).count()
+
+    return {
+        "current": current_count,
+        "limit": SUBJECT_REQUEST_FREE_TIER_LIMIT,
+        "tariff": "Free",
+        "is_limit_reached": current_count >= SUBJECT_REQUEST_FREE_TIER_LIMIT,
+    }
+
+
+@app.get("/api/v1/subject-requests/", response_model=List[SubjectRequestResponse])
+def list_subject_requests(
+    tenant_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    tenant = db.query(models.Tenant).filter(
+        models.Tenant.id == tenant_id,
+        models.Tenant.user_id == current_user.id
+    ).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена или доступ запрещен")
+
+    requests_list = (
+        db.query(models.SubjectRequest)
+        .filter(
+            models.SubjectRequest.tenant_id == tenant_id,
+            models.SubjectRequest.user_id == current_user.id,
+        )
+        .order_by(models.SubjectRequest.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return [_subject_request_to_response(sr) for sr in requests_list]
+
+
+@app.post("/api/v1/subject-requests/", response_model=SubjectRequestResponse)
+def create_subject_request(
+    tenant_id: int,
+    body: SubjectRequestCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    tenant = db.query(models.Tenant).filter(
+        models.Tenant.id == tenant_id,
+        models.Tenant.user_id == current_user.id
+    ).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена или доступ запрещен")
+
+    # Paywall: лимит на Free
+    current_count = db.query(models.SubjectRequest).filter(
+        models.SubjectRequest.tenant_id == tenant_id,
+        models.SubjectRequest.user_id == current_user.id
+    ).count()
+    if current_count >= SUBJECT_REQUEST_FREE_TIER_LIMIT:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Достигнут лимит запросов субъектов для тарифа Free ({SUBJECT_REQUEST_FREE_TIER_LIMIT}). Обновите тариф на Pro для снятия ограничений."
+        )
+
+    # Валидация типа запроса
+    if body.request_type not in ALLOWED_REQUEST_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Недопустимый тип запроса. Допустимые: {', '.join(sorted(ALLOWED_REQUEST_TYPES))}"
+        )
+
+    # Валидация связанного субъекта (если передан)
+    if body.linked_subject_id is not None:
+        subj = db.query(models.PdSubject).filter(
+            models.PdSubject.id == body.linked_subject_id,
+            models.PdSubject.user_id == current_user.id,
+            models.PdSubject.tenant_id == tenant_id,
+        ).first()
+        if not subj:
+            raise HTTPException(status_code=404, detail="Связанный субъект не найден в реестре компании")
+
+    # Расчёт дедлайна (+10 рабочих дней)
+    deadline = _calculate_deadline(body.received_at)
+
+    new_req = models.SubjectRequest(
+        subject_name=body.subject_name,
+        request_type=body.request_type,
+        received_at=body.received_at,
+        deadline=deadline,
+        status="pending",
+        linked_subject_id=body.linked_subject_id,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+    )
+    db.add(new_req)
+    db.commit()
+    db.refresh(new_req)
+    return _subject_request_to_response(new_req)
+
+
+@app.post("/api/v1/subject-requests/{request_id}/generate-pdf")
+def generate_subject_response_pdf(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Генерирует PDF-ответ на запрос субъекта ПДн."""
+    sr = db.query(models.SubjectRequest).filter(
+        models.SubjectRequest.id == request_id,
+        models.SubjectRequest.user_id == current_user.id,
+    ).first()
+    if not sr:
+        raise HTTPException(status_code=404, detail="Запрос не найден или доступ запрещен")
+
+    tenant = db.query(models.Tenant).filter(models.Tenant.id == sr.tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+
+    company_data = {
+        "name": tenant.name,
+        "inn": tenant.inn,
+        "address": tenant.address or "",
+        "director_name": tenant.director_name or "",
+    }
+
+    request_data = {
+        "subject_name": sr.subject_name,
+        "request_type": sr.request_type,
+        "received_at": sr.received_at.strftime('%d.%m.%Y'),
+        "deadline": sr.deadline.strftime('%d.%m.%Y'),
+    }
+
+    subject_data = None
+    if sr.linked_subject:
+        subject_data = {
+            "category": sr.linked_subject.category,
+            "legal_basis": sr.linked_subject.legal_basis,
+            "data_types": sr.linked_subject.data_types or "",
+            "data_systems": [
+                {
+                    "name": ds.name,
+                    "system_type": ds.system_type,
+                    "data_location": ds.data_location or "",
+                }
+                for ds in sr.linked_subject.data_systems if ds.is_active
+            ],
+        }
+
+    try:
+        pdf_bytes = bytes(
+            document_generator.generate_subject_response_pdf(company_data, request_data, subject_data)
+        )
+    except Exception as e:
+        import traceback
+        print("SUBJECT RESPONSE PDF ERROR:\n", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Ошибка генерации PDF: {str(e)}")
+
+    # Помечаем как обработанный
+    sr.status = "responded"
+    sr.response_generated_at = datetime.now(timezone.utc)
+
+    # Сохраняем в историю документов
+    safe_name = sr.subject_name.replace(' ', '_')[:50]
+    filename = f"response_{sr.request_type}_{safe_name}_{tenant.inn}.pdf"
+    history = models.DocumentHistory(
+        user_id=current_user.id,
+        tenant_id=tenant.id,
+        document_type=f"subject-response-{sr.request_type}",
+        file_format="pdf",
+        filename=filename,
+    )
+    db.add(history)
+    db.commit()
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.delete("/api/v1/subject-requests/{request_id}")
+def delete_subject_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    sr = db.query(models.SubjectRequest).filter(
+        models.SubjectRequest.id == request_id,
+        models.SubjectRequest.user_id == current_user.id,
+    ).first()
+    if not sr:
+        raise HTTPException(status_code=404, detail="Запрос не найден или доступ запрещен")
+
+    db.delete(sr)
+    db.commit()
+    return {"message": "Запрос удалён"}
+
 
 # ============================================================================
 # DOCUMENT HISTORY
