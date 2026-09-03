@@ -35,7 +35,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 # APP INIT
 # ============================================================================
 # Создаём все таблицы (включая новые: data_systems, pd_subject_data_systems)
-Base.metadata.create_all(bind=engine)
+models.Base.metadata.create_all(bind=engine)
 
 # Принудительно создаём таблицу pd_subjects, если её нет
 with engine.connect() as conn:
