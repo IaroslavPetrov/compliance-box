@@ -14,6 +14,25 @@ FONT_BOLD_PATH = os.path.join(FONT_DIR, "Roboto-Bold.ttf")
 
 
 class DocumentGenerator:
+
+    # =========================================================================
+    # СПРАВОЧНИКИ ДЛЯ КАРТЫ ОБРАБОТКИ ПДн
+    # =========================================================================
+    SYSTEM_TYPE_LABELS = {
+        'local': 'Локальная система',
+        'cloud_saas': 'Облачный SaaS',
+        'file': 'Файл / таблица',
+        'physical': 'Физический носитель',
+    }
+
+    CATEGORY_LABELS = {
+        'employees': 'Сотрудники',
+        'clients': 'Клиенты',
+        'candidates': 'Кандидаты',
+        'visitors': 'Посетители сайта',
+        'contractors': 'Подрядчики',
+    }
+
     # =========================================================================
     # ГЕНЕРАЦИЯ PDF
     # =========================================================================
@@ -110,6 +129,149 @@ class DocumentGenerator:
         doc.save(buffer)
         buffer.seek(0)
         return buffer.getvalue()
+
+    # =========================================================================
+    # КАРТА ОБРАБОТКИ ПДн: ТАБЛИЦА ИС (PDF)
+    # =========================================================================
+    def _render_data_map_table(self, pdf, headers, rows, col_widths):
+        line_h = 5
+        x0 = 10  # левое поле FPDF по умолчанию
+        total_w = sum(col_widths)
+
+        # Шапка таблицы
+        pdf.set_font('Roboto', 'B', 8)
+        pdf.set_fill_color(230, 230, 230)
+        y0 = pdf.get_y()
+        x = x0
+        for i, h in enumerate(headers):
+            pdf.set_xy(x, y0)
+            pdf.cell(col_widths[i], 8, h, border=1, fill=True, align='C')
+            x += col_widths[i]
+        pdf.set_xy(x0, y0 + 8)
+
+        # Строки данных
+        pdf.set_font('Roboto', '', 8)
+        for row in rows:
+            # Высота строки = максимум строк текста в ячейках
+            max_lines = 1
+            for i, text in enumerate(row):
+                text_w = pdf.get_string_width(str(text))
+                lines = int(text_w / (col_widths[i] - 3)) + 1
+                max_lines = max(max_lines, lines)
+            row_h = max_lines * line_h + 2
+
+            # Перенос на новую страницу, если строка не помещается
+            if pdf.get_y() + row_h > 285:
+                pdf.add_page()
+                y0 = pdf.get_y()
+                x = x0
+                pdf.set_font('Roboto', 'B', 8)
+                pdf.set_fill_color(230, 230, 230)
+                for i, h in enumerate(headers):
+                    pdf.set_xy(x, y0)
+                    pdf.cell(col_widths[i], 8, h, border=1, fill=True, align='C')
+                    x += col_widths[i]
+                pdf.set_xy(x0, y0 + 8)
+                pdf.set_font('Roboto', '', 8)
+
+            y0 = pdf.get_y()
+            x = x0
+            for i, text in enumerate(row):
+                pdf.set_xy(x + 1, y0 + 1)
+                pdf.multi_cell(col_widths[i] - 2, line_h, str(text), border=0, align='L')
+                x += col_widths[i]
+
+            # Рамка строки и вертикальные разделители
+            pdf.rect(x0, y0, total_w, row_h)
+            x = x0
+            for w in col_widths[:-1]:
+                x += w
+                pdf.line(x, y0, x, y0 + row_h)
+            pdf.set_xy(x0, y0 + row_h)
+
+    def generate_data_map_pdf(self, company_data: dict, data_systems: list) -> bytes:
+        name = company_data.get('name', 'Организация')
+        inn = company_data.get('inn', '')
+
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.add_font('Roboto', '', FONT_PATH, uni=True)
+        pdf.add_font('Roboto', 'B', FONT_BOLD_PATH, uni=True)
+
+        # Шапка документа
+        pdf.set_font('Roboto', 'B', 14)
+        pdf.multi_cell(0, 8, f"КАРТА ОБРАБОТКИ ПЕРСОНАЛЬНЫХ ДАННЫХ\n{name}", align='C')
+        pdf.ln(2)
+
+        pdf.set_font('Roboto', '', 10)
+        today = datetime.now().strftime('%d.%m.%Y')
+        pdf.cell(0, 6, f"Дата формирования: {today}", align='R', new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(2)
+
+        pdf.set_font('Roboto', '', 10)
+        pdf.multi_cell(0, 6, f"Оператор: {name} (ИНН: {inn})")
+        pdf.multi_cell(
+            0, 6,
+            "Настоящий документ определяет информационные системы (ИС), в которых оператором "
+            "обрабатываются персональные данные, и составлен в соответствии с требованиями "
+            "Федерального закона от 27.07.2006 № 152-ФЗ «О персональных данных»."
+        )
+        pdf.ln(4)
+
+        if not data_systems:
+            pdf.set_font('Roboto', '', 11)
+            pdf.multi_cell(0, 6, "На дату формирования документа информационные системы, обрабатывающие персональные данные, у оператора не зарегистрированы.")
+        else:
+            headers = ["№", "Информационная система", "Категории субъектов", "Локация данных", "Ответственный", "Субъектов"]
+            col_widths = [8, 50, 38, 42, 40, 12]
+
+            rows = []
+            total_subjects = 0
+            for idx, ds in enumerate(data_systems, start=1):
+                type_label = self.SYSTEM_TYPE_LABELS.get(ds.get('system_type', ''), ds.get('system_type', ''))
+                cats = ", ".join(
+                    self.CATEGORY_LABELS.get(c, c) for c in ds.get('categories', [])
+                ) or "—"
+                location = ds.get('data_location') or "—"
+                resp_parts = []
+                if ds.get('responsible_name'):
+                    resp_parts.append(ds['responsible_name'])
+                if ds.get('responsible_position'):
+                    resp_parts.append(f"({ds['responsible_position']})")
+                resp = " ".join(resp_parts) or "—"
+                subj = ds.get('pd_subjects_count', 0) or 0
+                total_subjects += subj
+
+                rows.append([
+                    str(idx),
+                    f"{ds.get('name', '')} — {type_label}",
+                    cats,
+                    location,
+                    resp,
+                    str(subj),
+                ])
+
+            self._render_data_map_table(pdf, headers, rows, col_widths)
+
+            pdf.ln(4)
+            pdf.set_font('Roboto', 'B', 10)
+            pdf.multi_cell(
+                0, 6,
+                f"Итого информационных систем: {len(data_systems)}. "
+                f"Всего субъектов ПДн в системах: {total_subjects}."
+            )
+
+        # Блок подписи
+        pdf.ln(6)
+        pdf.set_font('Roboto', '', 11)
+        pdf.multi_cell(0, 6, "Ответственный за организацию обработки персональных данных:")
+        pdf.ln(4)
+        pdf.multi_cell(0, 6, "_________________ / _________________________________")
+        pdf.multi_cell(0, 6, "(подпись)                          (расшифровка подписи)")
+        pdf.ln(2)
+        pdf.multi_cell(0, 6, "Дата: «___» _______________ 20___ г.")
+
+        return pdf.output()
 
     # =========================================================================
     # ДАННЫЕ ДЛЯ ДОКУМЕНТОВ (ОБЩИЕ)

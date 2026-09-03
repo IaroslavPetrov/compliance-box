@@ -446,7 +446,7 @@ def _data_system_to_response(ds: models.DataSystem) -> DataSystemResponse:
         pd_subjects_count=len(ds.pd_subjects) if ds.pd_subjects else 0,
     )
 
-# ⚠️ ВАЖНО: статический роут /limits ДОЛЖЕН идти ДО динамических {system_id}
+# ⚠️ ВАЖНО: статические роуты /limits и /export/pdf ДОЛЖНЫ идти ДО динамических {system_id}
 @app.get("/api/v1/data-systems/limits", response_model=DataSystemLimitsResponse)
 def get_data_systems_limits(
     tenant_id: int,
@@ -471,6 +471,75 @@ def get_data_systems_limits(
         limit=DATA_SYSTEM_FREE_TIER_LIMIT,
         tariff="Free",
         is_limit_reached=current_count >= DATA_SYSTEM_FREE_TIER_LIMIT,
+    )
+
+@app.get("/api/v1/data-systems/export/pdf")
+def export_data_systems_pdf(
+    tenant_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Экспорт Карты обработки ПДн в PDF для Роскомнадзора."""
+    tenant = db.query(models.Tenant).filter(
+        models.Tenant.id == tenant_id,
+        models.Tenant.user_id == current_user.id
+    ).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена или доступ запрещен")
+
+    systems = db.query(models.DataSystem).filter(
+        models.DataSystem.tenant_id == tenant_id,
+        models.DataSystem.user_id == current_user.id,
+        models.DataSystem.is_active == True
+    ).order_by(models.DataSystem.created_at.asc()).all()
+
+    # Формируем список ИС с десериализованными категориями
+    systems_data = []
+    for ds in systems:
+        try:
+            cats = json.loads(ds.categories) if ds.categories else []
+        except (json.JSONDecodeError, TypeError):
+            cats = []
+        systems_data.append({
+            "name": ds.name,
+            "system_type": ds.system_type,
+            "categories": cats,
+            "data_location": ds.data_location,
+            "responsible_name": ds.responsible_name,
+            "responsible_position": ds.responsible_position,
+            "pd_subjects_count": len(ds.pd_subjects) if ds.pd_subjects else 0,
+        })
+
+    company_data = {
+        "name": tenant.name,
+        "inn": tenant.inn,
+        "email": tenant.email or "",
+    }
+
+    try:
+        pdf_bytes = bytes(document_generator.generate_data_map_pdf(company_data, systems_data))
+    except Exception as e:
+        import traceback
+        print("DATA MAP PDF ERROR:\n", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Ошибка генерации PDF: {str(e)}")
+
+    # Сохраняем в историю документов
+    history = models.DocumentHistory(
+        user_id=current_user.id,
+        tenant_id=tenant.id,
+        document_type="data-map",
+        file_format="pdf",
+        filename=f"data_map_{tenant.inn}.pdf"
+    )
+    db.add(history)
+    db.commit()
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=data_map_{tenant.inn}.pdf"
+        }
     )
 
 @app.get("/api/v1/data-systems/", response_model=List[DataSystemResponse])
