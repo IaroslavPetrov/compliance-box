@@ -165,3 +165,33 @@ class DataSystemLimitsResponse(BaseModel):
     limit: int
     tariff: str
     is_limit_reached: bool
+
+# ============================================================================
+# SUBJECT REQUEST SCHEMAS (ЗАПРОСЫ СУБЪЕКТОВ ПДн — киллер-фича)
+# ============================================================================
+class SubjectRequestCreate(BaseModel):
+    subject_name: str  # ФИО субъекта
+    request_type: str  # 'information' | 'clarification' | 'destruction' | 'withdrawal'
+    received_at: datetime  # когда пришёл запрос
+    linked_subject_id: Optional[int] = None  # ID записи в Реестре (опционально)
+
+class SubjectRequestUpdate(BaseModel):
+    status: Optional[str] = None  # 'pending' | 'responded'
+
+class SubjectRequestResponse(BaseModel):
+    id: int
+    subject_name: str
+    request_type: str
+    received_at: datetime
+    deadline: datetime
+    status: str
+    response_generated_at: Optional[datetime] = None
+    linked_subject_id: Optional[int] = None
+    linked_subject_name: Optional[str] = None  # подтягивается из Реестра
+    linked_data_systems: List[str] = []  # названия ИС, где есть данные субъекта
+    tenant_id: int
+    user_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
