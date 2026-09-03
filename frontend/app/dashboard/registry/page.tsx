@@ -27,6 +27,7 @@ interface PdSubject {
   created_at: string;
   tenant_id: number;
   user_id: number;
+  data_system_ids: number[];
 }
 
 interface LimitsInfo {
@@ -34,6 +35,15 @@ interface LimitsInfo {
   limit: number;
   tariff: string;
   is_limit_reached: boolean;
+}
+
+interface DataSystem {
+  id: number;
+  name: string;
+  system_type: string;
+  categories: string[];
+  data_location?: string;
+  is_active: boolean;
 }
 
 const CATEGORIES = [
@@ -52,6 +62,20 @@ const LEGAL_BASES = [
   'Исполнение закона',
   'Иное',
 ];
+
+const SYSTEM_TYPE_LABELS: Record<string, string> = {
+  local: 'Локальная',
+  cloud_saas: 'SaaS',
+  file: 'Файл',
+  physical: 'Бумага',
+};
+
+const SYSTEM_TYPE_COLORS: Record<string, string> = {
+  local: '#4A90E2',
+  cloud_saas: '#00C853',
+  file: '#FFC107',
+  physical: '#9C27B0',
+};
 
 export default function RegistryPage() {
   const router = useRouter();
@@ -72,6 +96,8 @@ export default function RegistryPage() {
     legal_basis: '',
     data_types: '',
   });
+  const [selectedSystemIds, setSelectedSystemIds] = useState<number[]>([]);
+  const [availableSystems, setAvailableSystems] = useState<DataSystem[]>([]);
   const [saving, setSaving] = useState(false);
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
@@ -89,11 +115,14 @@ export default function RegistryPage() {
         return;
       }
 
-      const [subjectsRes, limitsRes] = await Promise.all([
+      const [subjectsRes, limitsRes, systemsRes] = await Promise.all([
         fetch(`https://compliance-box-backend.onrender.com/api/v1/pd-subjects/?tenant_id=${tenantId}`, {
           headers: { 'Authorization': `Bearer ${token}` },
         }),
         fetch(`https://compliance-box-backend.onrender.com/api/v1/pd-subjects/limits?tenant_id=${tenantId}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        }),
+        fetch(`https://compliance-box-backend.onrender.com/api/v1/data-systems/?tenant_id=${tenantId}`, {
           headers: { 'Authorization': `Bearer ${token}` },
         }),
       ]);
@@ -104,6 +133,11 @@ export default function RegistryPage() {
 
       setSubjects(await subjectsRes.json());
       setLimits(await limitsRes.json());
+      if (systemsRes.ok) {
+        setAvailableSystems(await systemsRes.json());
+      } else {
+        setAvailableSystems([]);
+      }
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -118,11 +152,13 @@ export default function RegistryPage() {
   const openAddModal = () => {
     if (limits?.is_limit_reached) {
       toast.warning(`Достигнут лимит ${limits.limit} записей для тарифа ${limits.tariff}. Обновите тариф для снятия ограничений.`);
+      posthog.capture('paywall_hit', { feature: 'pd_subjects', current: limits.current, limit: limits.limit, tariff: limits.tariff });
       return;
     }
 
     setEditingSubject(null);
     setFormData({ full_name: '', category: '', legal_basis: '', data_types: '' });
+    setSelectedSystemIds([]);
     setShowModal(true);
   };
 
@@ -134,17 +170,27 @@ export default function RegistryPage() {
       legal_basis: subject.legal_basis,
       data_types: subject.data_types || '',
     });
+    setSelectedSystemIds(subject.data_system_ids || []);
     setShowModal(true);
   };
 
   const closeModal = () => {
     setShowModal(false);
     setEditingSubject(null);
+    setSelectedSystemIds([]);
   };
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const toggleSystem = (systemId: number) => {
+    setSelectedSystemIds(prev =>
+      prev.includes(systemId)
+        ? prev.filter(id => id !== systemId)
+        : [...prev, systemId]
+    );
   };
 
   const handleSave = async () => {
@@ -165,6 +211,7 @@ export default function RegistryPage() {
     try {
       const token = localStorage.getItem('token');
 
+      // 1. Сохраняем/создаём субъекта
       const url = editingSubject
         ? `https://compliance-box-backend.onrender.com/api/v1/pd-subjects/${editingSubject.id}`
         : `https://compliance-box-backend.onrender.com/api/v1/pd-subjects/?tenant_id=${tenantId}`;
@@ -185,7 +232,34 @@ export default function RegistryPage() {
         throw new Error(errData.detail || 'Ошибка при сохранении');
       }
 
+      const savedSubject = await res.json();
+      const subjectId = editingSubject ? editingSubject.id : savedSubject.id;
+
+      // 2. Сохраняем привязки к ИС (если список ИС загружен)
+      if (availableSystems.length > 0) {
+        const linkRes = await fetch(
+          `https://compliance-box-backend.onrender.com/api/v1/pd-subjects/${subjectId}/data-systems`,
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ data_system_ids: selectedSystemIds }),
+          }
+        );
+        if (!linkRes.ok) {
+          // Не блокируем основной успех, но логируем
+          console.warn('Не удалось сохранить привязки к ИС');
+        }
+      }
+
       toast.success(editingSubject ? 'Изменения сохранены' : 'Запись добавлена в реестр');
+      posthog.capture('pd_subject_saved', {
+        action: editingSubject ? 'update' : 'create',
+        category: formData.category,
+        data_systems_count: selectedSystemIds.length,
+      });
       await fetchData();
       closeModal();
     } catch (err: any) {
@@ -217,6 +291,7 @@ export default function RegistryPage() {
       }
 
       toast.success('Запись удалена из реестра');
+      posthog.capture('pd_subject_deleted');
       await fetchData();
       setDeleteConfirmId(null);
     } catch (err: any) {
@@ -868,6 +943,102 @@ export default function RegistryPage() {
                   onFocus={(e) => { e.target.style.borderColor = '#FF6B35'; }}
                   onBlur={(e) => { e.target.style.borderColor = '#2A2A2A'; }}
                 />
+              </div>
+
+              {/* ===== СЕКЦИЯ ВЫБОРА ИНФОРМАЦИОННЫХ СИСТЕМ ===== */}
+              <div>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  color: '#FFFFFF',
+                  fontWeight: '500',
+                  fontSize: '0.9rem',
+                }}>
+                  Информационные системы
+                </label>
+                <p style={{
+                  margin: '0 0 0.75rem',
+                  fontSize: '0.8rem',
+                  color: '#666',
+                  lineHeight: 1.4,
+                }}>
+                  В каких системах обрабатываются данные этого субъекта
+                </p>
+
+                {availableSystems.length === 0 ? (
+                  <div style={{
+                    padding: '1rem',
+                    background: '#0A0A0A',
+                    border: '1px dashed #2A2A2A',
+                    borderRadius: '8px',
+                    color: '#666',
+                    fontSize: '0.85rem',
+                    textAlign: 'center',
+                    lineHeight: 1.4,
+                  }}>
+                    Нет информационных систем.{' '}
+                    <a
+                      href="/dashboard/data-map"
+                      style={{ color: '#FF6B35', textDecoration: 'none' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
+                    >
+                      Добавьте в Карте обработки ПДн
+                    </a>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {availableSystems.map((system) => {
+                      const active = selectedSystemIds.includes(system.id);
+                      const typeLabel = SYSTEM_TYPE_LABELS[system.system_type] || system.system_type;
+                      const typeColor = SYSTEM_TYPE_COLORS[system.system_type] || '#A0A0A0';
+                      return (
+                        <button
+                          key={system.id}
+                          type="button"
+                          onClick={() => toggleSystem(system.id)}
+                          disabled={limits?.is_limit_reached && !editingSubject}
+                          style={{
+                            padding: '0.45rem 0.85rem',
+                            background: active ? 'rgba(255, 107, 53, 0.15)' : '#2A2A2A',
+                            border: `1px solid ${active ? '#FF6B35' : '#3A3A3A'}`,
+                            borderRadius: '16px',
+                            color: active ? '#FF6B35' : '#A0A0A0',
+                            fontSize: '0.85rem',
+                            fontWeight: 600,
+                            cursor: (limits?.is_limit_reached && !editingSubject) ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.2s',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            opacity: (limits?.is_limit_reached && !editingSubject) ? 0.5 : 1,
+                          }}
+                        >
+                          <span style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: typeColor,
+                            flexShrink: 0,
+                          }} />
+                          <span>{system.name}</span>
+                          <span style={{
+                            padding: '0.1rem 0.4rem',
+                            background: active ? 'rgba(255, 107, 53, 0.3)' : '#1A1A1A',
+                            borderRadius: '10px',
+                            fontSize: '0.7rem',
+                            color: active ? '#FF6B35' : '#666',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                          }}>
+                            {typeLabel}
+                          </span>
+                          {active && <span style={{ marginLeft: '0.1rem' }}>✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
