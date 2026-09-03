@@ -958,9 +958,8 @@ def generate_subject_response_pdf(
     sr.status = "responded"
     sr.response_generated_at = datetime.now(timezone.utc)
 
-    # Сохраняем в историю документов
-    safe_name = sr.subject_name.replace(' ', '_')[:50]
-    filename = f"response_{sr.request_type}_{safe_name}_{tenant.inn}.pdf"
+    # Сохраняем в историю документов — ASCII-only имя файла (HTTP-заголовки не умеют в кириллицу)
+    filename = f"subject_response_{sr.request_type}_{sr.id}_{tenant.inn}.pdf"
     history = models.DocumentHistory(
         user_id=current_user.id,
         tenant_id=tenant.id,
