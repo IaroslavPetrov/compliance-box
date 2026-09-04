@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Response, status
+from fastapi import FastAPI, Depends, HTTPException, Response, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -6,6 +6,7 @@ from sqlalchemy import text
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 import json
+import io
 
 from app.database import engine, Base, get_db
 from app import models
@@ -418,6 +419,136 @@ def delete_pd_subject(
     db.delete(db_subject)
     db.commit()
     return {"message": "Запись из реестра удалена"}
+
+# ============================================================================
+# ИМПОРТ СУБЪЕКТОВ ПДн ИЗ EXCEL / CSV (Реестр)
+# ============================================================================
+IMPORT_HEADER_MAP = {
+    'фио': 'full_name',
+    'full_name': 'full_name',
+    'фамилия имя отчество': 'full_name',
+    'имя': 'full_name',
+    'name': 'full_name',
+    'фамилия': 'full_name',
+    'сотрудник': 'full_name',
+    'субъект': 'full_name',
+    'категория': 'category',
+    'category': 'category',
+    'тип': 'category',
+    'основание': 'legal_basis',
+    'основание обработки': 'legal_basis',
+    'legal_basis': 'legal_basis',
+    'правовое основание': 'legal_basis',
+    'данные': 'data_types',
+    'типы данных': 'data_types',
+    'data_types': 'data_types',
+    'состав данных': 'data_types',
+    'перечень данных': 'data_types',
+}
+
+
+def _parse_import_file(filename: str, content: bytes):
+    """Парсит .csv / .xlsx и возвращает список словарей с полями субъекта."""
+    if filename.lower().endswith('.csv'):
+        import csv
+        text = None
+        for enc in ('utf-8-sig', 'cp1251', 'utf-8'):
+            try:
+                text = content.decode(enc)
+                break
+            except UnicodeDecodeError:
+                continue
+        if text is None:
+            raise ValueError('Не удалось распознать кодировку файла. Сохраните CSV в UTF-8.')
+        reader = csv.DictReader(io.StringIO(text))
+        raw_rows = [dict(r) for r in reader]
+    elif filename.lower().endswith('.xlsx'):
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        ws = wb.active
+        lines = list(ws.iter_rows(values_only=True))
+        wb.close()
+        if not lines:
+            return []
+        headers = [str(h).strip().lower() if h else '' for h in lines[0]]
+        raw_rows = []
+        for line in lines[1:]:
+            raw_rows.append({
+                headers[i]: line[i]
+                for i in range(len(headers))
+                if headers[i] and i < len(line) and line[i] not in (None, '')
+            })
+    else:
+        raise ValueError('Поддерживаются форматы .xlsx и .csv')
+
+    parsed = []
+    for raw in raw_rows:
+        row = {}
+        for key, value in raw.items():
+            if value in (None, ''):
+                continue
+            field = IMPORT_HEADER_MAP.get(str(key).strip().lower())
+            if field:
+                row[field] = str(value).strip()
+        if row.get('full_name'):
+            parsed.append(row)
+    return parsed
+
+
+@app.post("/api/v1/pd-subjects/import")
+def import_pd_subjects(
+    tenant_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Импортирует субъектов из Excel/CSV. Колонки распознаются по заголовкам."""
+    tenant = db.query(models.Tenant).filter(
+        models.Tenant.id == tenant_id,
+        models.Tenant.user_id == current_user.id,
+    ).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена или доступ запрещен")
+
+    content = file.file.read()
+    try:
+        rows = _parse_import_file(file.filename or '', content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail="В файле не найдено ни одной строки с данными. Проверьте, что есть колонка «ФИО»."
+        )
+
+    current_count = db.query(models.PdSubject).filter(
+        models.PdSubject.tenant_id == tenant_id,
+        models.PdSubject.user_id == current_user.id,
+    ).count()
+
+    created = 0
+    limit_blocked = 0
+    for row in rows:
+        if current_count + created >= FREE_TIER_LIMIT:
+            limit_blocked += 1
+            continue
+        db.add(models.PdSubject(
+            full_name=row['full_name'],
+            category=row.get('category') or 'Иное',
+            legal_basis=row.get('legal_basis') or 'Согласие субъекта',
+            data_types=row.get('data_types'),
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+        ))
+        created += 1
+
+    db.commit()
+    return {
+        "created": created,
+        "limit_blocked": limit_blocked,
+        "total_in_file": len(rows),
+    }
 
 # ============================================================================
 # DATA SYSTEMS (КАРТА ОБРАБОТКИ ПДн) — НОВАЯ СУЩНОСТЬ
@@ -1318,18 +1449,13 @@ def generate_compliance_report_pdf(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    """Генерирует PDF-отчёт из готового результата проверки (приходит с фронтенда).
-
-    body: { "tenant_id": int | null, "check": { url, checked_at, compliance_percentage,
-            total_required, passed_required, checks } }
-    """
+    """Генерирует PDF-отчёт из готового результата проверки (приходит с фронтенда)."""
     check_data = body.get("check") or {}
     tenant_id = body.get("tenant_id")
 
     if not check_data.get("url"):
         raise HTTPException(status_code=400, detail="Не переданы данные проверки (check.url)")
 
-    # Реквизиты компании — если проверка привязана к компании
     company_data = {}
     if tenant_id:
         tenant = db.query(models.Tenant).filter(
@@ -1348,11 +1474,9 @@ def generate_compliance_report_pdf(
         print("COMPLIANCE REPORT PDF ERROR:\n", traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Ошибка генерации PDF: {str(e)}")
 
-    # Имя файла — только ASCII (HTTP-заголовки не умеют в кириллицу)
     date_str = datetime.now().strftime('%Y%m%d_%H%M')
     filename = f"compliance_report_{tenant_id or 'site'}_{date_str}.pdf"
 
-    # Сохраняем в историю документов
     history = models.DocumentHistory(
         user_id=current_user.id,
         tenant_id=tenant_id if tenant_id else None,
