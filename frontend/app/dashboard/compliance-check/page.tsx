@@ -10,9 +10,12 @@ import {
   IconCheckCircle,
   IconXCircle,
   IconAlert,
+  IconClose,
 } from '../../../components/icons';
 import { useToast } from '../../../contexts/ToastContext';
 import posthog from '../../../contexts/posthog';
+
+const API = 'https://compliance-box-backend.onrender.com/api/v1';
 
 interface ComplianceCheck {
   name: string;
@@ -43,6 +46,10 @@ export default function ComplianceCheckPage() {
   const [customUrl, setCustomUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ComplianceResult | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState('');
+  const [emailSending, setEmailSending] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMobile = useIsMobile();
@@ -67,7 +74,7 @@ export default function ComplianceCheckPage() {
           return;
         }
 
-        const res = await fetch('https://compliance-box-backend.onrender.com/api/v1/tenants/', {
+        const res = await fetch(`${API}/tenants/`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
@@ -97,7 +104,7 @@ export default function ComplianceCheckPage() {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(
-        `https://compliance-box-backend.onrender.com/api/v1/compliance/check?website_url=${encodeURIComponent(urlToCheck)}`,
+        `${API}/compliance/check?website_url=${encodeURIComponent(urlToCheck)}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -141,6 +148,83 @@ export default function ComplianceCheckPage() {
     }
 
     await checkWebsite(urlToCheck);
+  };
+
+  const handleDownloadReport = async () => {
+    if (!result) return;
+    setReportLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API}/compliance/report-pdf`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tenant_id: selectedTenant, check: result }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => null);
+        throw new Error(e?.detail || 'Ошибка генерации отчёта');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `compliance_report_${selectedTenant || 'site'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      posthog.capture('compliance_report_downloaded', {
+        url: result.url,
+        score: result.compliance_percentage,
+      });
+      toast.success('Отчёт о проверке скачан');
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!result) return;
+    if (!emailTo.trim() || !emailTo.includes('@')) {
+      toast.warning('Введите корректный email');
+      return;
+    }
+    setEmailSending(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API}/compliance/report-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          email_to: emailTo.trim(),
+          tenant_id: selectedTenant,
+          check: result,
+        }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => null);
+        throw new Error(e?.detail || 'Ошибка отправки');
+      }
+      posthog.capture('compliance_report_emailed', {
+        url: result.url,
+        score: result.compliance_percentage,
+      });
+      toast.success(`Отчёт отправлен на ${emailTo.trim()}`);
+      setEmailModalOpen(false);
+      setEmailTo('');
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setEmailSending(false);
+    }
   };
 
   const getScoreColor = (percentage: number) => {
@@ -353,6 +437,78 @@ export default function ComplianceCheckPage() {
               </div>
             </div>
 
+            {/* Кнопки экспорта отчёта */}
+            <div style={{
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: '0.75rem',
+              marginBottom: '1.5rem',
+            }}>
+              <button
+                onClick={handleDownloadReport}
+                disabled={reportLoading}
+                style={{
+                  flex: 1,
+                  padding: '0.875rem',
+                  background: reportLoading ? '#4A4A4A' : 'transparent',
+                  color: '#00C853',
+                  border: '1px solid #00C853',
+                  borderRadius: '8px',
+                  cursor: reportLoading ? 'not-allowed' : 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.95rem',
+                  transition: 'all 0.3s',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                }}
+                onMouseEnter={(e) => {
+                  if (!reportLoading) {
+                    e.currentTarget.style.background = '#00C853';
+                    e.currentTarget.style.color = '#FFFFFF';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!reportLoading) {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = '#00C853';
+                  }
+                }}
+              >
+                {reportLoading ? 'Генерация...' : '📥 Скачать отчёт (PDF)'}
+              </button>
+              <button
+                onClick={() => setEmailModalOpen(true)}
+                style={{
+                  flex: 1,
+                  padding: '0.875rem',
+                  background: 'transparent',
+                  color: '#4A90E2',
+                  border: '1px solid #4A90E2',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.95rem',
+                  transition: 'all 0.3s',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#4A90E2';
+                  e.currentTarget.style.color = '#FFFFFF';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = '#4A90E2';
+                }}
+              >
+                📧 Отправить на email
+              </button>
+            </div>
+
             <h3 style={{
               margin: '1.5rem 0 1rem',
               fontSize: '1.1rem',
@@ -471,6 +627,90 @@ export default function ComplianceCheckPage() {
           </div>
         )}
       </div>
+
+      {/* ===== МОДАЛКА ОТПРАВКИ НА EMAIL ===== */}
+      {emailModalOpen && (
+        <div
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            zIndex: 1000, padding: isMobile ? '1rem' : '2rem',
+          }}
+          onClick={() => setEmailModalOpen(false)}
+        >
+          <div
+            style={{
+              background: '#1A1A1A', borderRadius: '12px',
+              padding: isMobile ? '1.5rem' : '2rem',
+              maxWidth: '450px', width: '100%',
+              border: '1px solid #2A2A2A',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ margin: 0, fontSize: isMobile ? '1.25rem' : '1.5rem', fontWeight: 700 }}>
+                Отправить отчёт на email
+              </h2>
+              <button
+                onClick={() => setEmailModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: '#A0A0A0', cursor: 'pointer', padding: '0.25rem', display: 'inline-flex' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#FF4444')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = '#A0A0A0')}
+                aria-label="Закрыть"
+              >
+                <IconClose />
+              </button>
+            </div>
+
+            <label style={{ display: 'block', marginBottom: '0.5rem', color: '#FFFFFF', fontWeight: 500, fontSize: '0.9rem' }}>
+              Email получателя
+            </label>
+            <input
+              type="email"
+              value={emailTo}
+              onChange={(e) => setEmailTo(e.target.value)}
+              placeholder="you@example.com"
+              style={inputStyle}
+              onFocus={(e) => { e.target.style.borderColor = '#FF6B35'; }}
+              onBlur={(e) => { e.target.style.borderColor = '#2A2A2A'; }}
+            />
+            <p style={{ margin: '0.75rem 0 0', color: '#666', fontSize: '0.8rem', lineHeight: 1.4 }}>
+              Получатель получит PDF-отчёт о проверке сайта с баллом соответствия и списком пробелов.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '0.75rem', marginTop: '1.5rem' }}>
+              <button
+                onClick={handleSendEmail}
+                disabled={emailSending}
+                style={{
+                  flex: 1, padding: '0.875rem',
+                  background: emailSending ? '#4A4A4A' : '#4A90E2',
+                  color: '#FFFFFF', border: 'none', borderRadius: '8px',
+                  fontSize: '1rem', fontWeight: 600,
+                  cursor: emailSending ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {emailSending ? 'Отправка...' : 'Отправить'}
+              </button>
+              <button
+                onClick={() => setEmailModalOpen(false)}
+                disabled={emailSending}
+                style={{
+                  flex: 1, padding: '0.875rem',
+                  background: '#2A2A2A', color: '#FFFFFF',
+                  border: '1px solid #3A3A3A', borderRadius: '8px',
+                  fontSize: '1rem', fontWeight: 600,
+                  cursor: emailSending ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

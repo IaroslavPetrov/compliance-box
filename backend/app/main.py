@@ -1368,3 +1368,83 @@ def generate_compliance_report_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )    
+
+# ============================================================================
+# ОТПРАВКА ОТЧЁТА О ПРОВЕРКЕ САЙТА НА EMAIL (через Resend)
+# ============================================================================
+@app.post("/api/v1/compliance/report-email")
+def send_compliance_report_email(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Отправляет PDF-отчёт о проверке сайта на указанный email."""
+    import os
+    import base64
+
+    email_to = (body.get("email_to") or "").strip()
+    check_data = body.get("check") or {}
+    tenant_id = body.get("tenant_id")
+
+    if not email_to or "@" not in email_to:
+        raise HTTPException(status_code=400, detail="Некорректный email")
+    if not check_data.get("url"):
+        raise HTTPException(status_code=400, detail="Не переданы данные проверки (check.url)")
+
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Email-отправка ещё не настроена. Добавьте переменную RESEND_API_KEY в настройках Render."
+        )
+
+    company_data = {}
+    if tenant_id:
+        tenant = db.query(models.Tenant).filter(
+            models.Tenant.id == tenant_id,
+            models.Tenant.user_id == current_user.id,
+        ).first()
+        if tenant:
+            company_data = {"name": tenant.name, "inn": tenant.inn}
+
+    pdf_bytes = bytes(document_generator.generate_compliance_report_pdf(company_data, check_data))
+
+    try:
+        import resend
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Пакет resend не установлен на сервере")
+
+    resend.api_key = api_key
+    date_str = datetime.now().strftime('%Y%m%d_%H%M')
+    filename = f"compliance_report_{tenant_id or 'site'}_{date_str}.pdf"
+
+    try:
+        resend.Emails.send({
+            "from": "ComplianceBox <onboarding@resend.dev>",
+            "to": [email_to],
+            "subject": f"Отчёт о проверке сайта {check_data.get('url')} — {check_data.get('compliance_percentage')}%",
+            "html": (
+                "<p>Здравствуйте!</p>"
+                "<p>Во вложении — отчёт о проверке сайта на соответствие требованиям 152-ФЗ, "
+                "сформированный сервисом ComplianceBox.</p>"
+                "<p style='color:#888'>Это письмо сформировано автоматически.</p>"
+            ),
+            "attachments": [
+                {"filename": filename, "content": base64.b64encode(pdf_bytes).decode()}
+            ],
+        })
+    except Exception as e:
+        import traceback
+        print("REPORT EMAIL ERROR:\n", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Ошибка отправки email: {str(e)}")
+
+    history = models.DocumentHistory(
+        user_id=current_user.id,
+        tenant_id=tenant_id if tenant_id else None,
+        document_type="compliance-report",
+        file_format="email",
+        filename=filename,
+    )
+    db.add(history)
+    db.commit()
+    return {"message": f"Отчёт отправлен на {email_to}"}
