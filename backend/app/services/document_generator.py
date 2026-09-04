@@ -141,7 +141,7 @@ class DocumentGenerator:
         return buffer.getvalue()
 
     # =========================================================================
-    # БЕЗОПАСНЫЕ ПРИМИТИВЫ ДЛЯ КАРТЫ (без multi_cell — без исключений fpdf2)
+    # БЕЗОПАСНЫЕ ПРИМИТИВЫ (без multi_cell — без исключений fpdf2)
     # =========================================================================
     def _wrap_text(self, pdf, text, max_width):
         """Переносит текст по словам; слишком длинные слова режет по символам."""
@@ -170,10 +170,12 @@ class DocumentGenerator:
         return lines
 
     def _write_wrapped(self, pdf, text, line_h, align='L'):
-        """Вывод текста с переносом через cell() — не может упасть с FPDFException."""
+        """Вывод текста с переносом через cell() + автоперенос на новую страницу."""
         usable = pdf.w - pdf.l_margin - pdf.r_margin
         for raw_line in str(text).split('\n'):
             for line in self._wrap_text(pdf, raw_line, usable):
+                if pdf.get_y() + line_h > 285:
+                    pdf.add_page()
                 pdf.cell(0, line_h, line, align=align, new_x="LMARGIN", new_y="NEXT")
 
     def _render_data_map_table(self, pdf, headers, rows, col_widths):
@@ -440,6 +442,129 @@ class DocumentGenerator:
         pdf.set_font('Roboto', '', 10)
         self._write_wrapped(pdf, "Ответственный за организацию обработки персональных данных:", 6)
         pdf.ln(3)
+        pdf.cell(0, 6, "_________________ / _________________________________", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, "(подпись)                          (расшифровка подписи)", new_x="LMARGIN", new_y="NEXT")
+
+        return pdf.output()
+
+    # =========================================================================
+    # ОТЧЁТ О ПРОВЕРКЕ САЙТА НА СООТВЕТСТВИЕ 152-ФЗ
+    # =========================================================================
+    def generate_compliance_report_pdf(self, company_data: dict, check_data: dict) -> bytes:
+        """PDF-отчёт по результатам автоматической проверки сайта.
+
+        company_data: name, inn (может быть пустым — отчёт по «голому» URL)
+        check_data: url, checked_at, compliance_percentage, total_required,
+                    passed_required, checks {key: {name, required, found, details[]}}
+        """
+        name = (company_data or {}).get('name') or ''
+        inn = (company_data or {}).get('inn') or ''
+
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.add_font('Roboto', '', FONT_PATH, uni=True)
+        pdf.add_font('Roboto', 'B', FONT_BOLD_PATH, uni=True)
+
+        # Шапка
+        pdf.set_font('Roboto', 'B', 14)
+        self._write_wrapped(pdf, "ОТЧЁТ О ПРОВЕРКЕ САЙТА", 8, align='C')
+        self._write_wrapped(pdf, "НА СООТВЕТСТВИЕ ТРЕБОВАНИЯМ 152-ФЗ", 8, align='C')
+        pdf.ln(3)
+
+        pdf.set_font('Roboto', '', 10)
+        checked_at = check_data.get('checked_at', '')
+        try:
+            checked_str = datetime.fromisoformat(str(checked_at).replace('Z', '+00:00')).strftime('%d.%m.%Y %H:%M')
+        except Exception:
+            checked_str = str(checked_at)
+
+        self._write_wrapped(pdf, f"Проверяемый сайт: {check_data.get('url', '')}", 6)
+        self._write_wrapped(pdf, f"Дата проверки: {checked_str}", 6)
+        if name:
+            self._write_wrapped(pdf, f"Оператор: {name}" + (f" (ИНН: {inn})" if inn else ""), 6)
+        pdf.ln(3)
+
+        # Крупный балл соответствия
+        score = int(check_data.get('compliance_percentage', 0) or 0)
+        passed = check_data.get('passed_required', 0)
+        total = check_data.get('total_required', 0)
+
+        if score >= 80:
+            pdf.set_text_color(0, 150, 60)
+        elif score >= 60:
+            pdf.set_text_color(200, 150, 0)
+        else:
+            pdf.set_text_color(220, 50, 50)
+        pdf.set_font('Roboto', 'B', 26)
+        pdf.cell(0, 12, f"{score}%", align='C', new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font('Roboto', '', 10)
+        self._write_wrapped(pdf, f"Соответствие обязательным требованиям ({passed} из {total} пунктов)", 6, align='C')
+        pdf.ln(4)
+
+        # Детальные результаты
+        checks = check_data.get('checks', {}) or {}
+        pdf.set_font('Roboto', 'B', 11)
+        self._write_wrapped(pdf, "РЕЗУЛЬТАТЫ ПРОВЕРКИ:", 7)
+        pdf.ln(1)
+
+        for _key, ch in checks.items():
+            found = bool(ch.get('found'))
+            required = bool(ch.get('required'))
+
+            if found:
+                mark, color = "ВЫПОЛНЕНО", (0, 150, 60)
+            elif required:
+                mark, color = "НЕ ВЫПОЛНЕНО", (220, 50, 50)
+            else:
+                mark, color = "РЕКОМЕНДАЦИЯ", (200, 150, 0)
+
+            pdf.set_text_color(*color)
+            pdf.set_font('Roboto', 'B', 10)
+            self._write_wrapped(pdf, f"[{mark}] {ch.get('name', '')}", 6)
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font('Roboto', '', 9)
+            self._write_wrapped(pdf, f"Приоритет: {'Обязательно' if required else 'Рекомендуется'}", 5)
+            for d in (ch.get('details') or [])[:5]:
+                self._write_wrapped(pdf, f"• {d}", 5)
+            pdf.ln(2)
+
+        # Критические пробелы
+        missing = [ch for ch in checks.values() if ch.get('required') and not ch.get('found')]
+        pdf.set_font('Roboto', 'B', 11)
+        if missing:
+            pdf.set_text_color(220, 50, 50)
+            self._write_wrapped(pdf, f"КРИТИЧЕСКИЕ ПРОБЕЛЫ ({len(missing)}):", 7)
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font('Roboto', '', 10)
+            for ch in missing:
+                self._write_wrapped(pdf, f"• {ch.get('name', '')}", 6)
+            pdf.ln(2)
+            self._write_wrapped(
+                pdf,
+                "Рекомендация: устранить критические пробелы до проверки Роскомнадзора. "
+                "Штраф за отсутствие Политики обработки ПДн — до 60 000 ₽, за отсутствие согласия — до 300 000 ₽.",
+                6,
+            )
+        else:
+            pdf.set_text_color(0, 150, 60)
+            self._write_wrapped(pdf, "Критических пробелов не выявлено: все обязательные требования выполнены.", 7)
+            pdf.set_text_color(0, 0, 0)
+
+        # Дисклеймер
+        pdf.ln(4)
+        pdf.set_font('Roboto', '', 8)
+        self._write_wrapped(
+            pdf,
+            "Юридический дисклеймер: результаты автоматической проверки носят исключительно информационный "
+            "характер и не являются официальным юридическим заключением. Для получения юридически значимого "
+            "аудита соответствия 152-ФЗ рекомендуем обратиться к профильным специалистам.",
+            5,
+        )
+
+        # Подпись
+        pdf.ln(4)
+        pdf.set_font('Roboto', '', 10)
         pdf.cell(0, 6, "_________________ / _________________________________", new_x="LMARGIN", new_y="NEXT")
         pdf.cell(0, 6, "(подпись)                          (расшифровка подписи)", new_x="LMARGIN", new_y="NEXT")
 
