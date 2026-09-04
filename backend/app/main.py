@@ -1308,3 +1308,63 @@ def check_website_compliance(
         import traceback
         print("COMPLIANCE CHECK ERROR:\n", traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Внутренняя ошибка при проверке: {str(e)}")
+
+# ============================================================================
+# PDF-ОТЧЁТ О ПРОВЕРКЕ САЙТА (скачивание готового результата)
+# ============================================================================
+@app.post("/api/v1/compliance/report-pdf")
+def generate_compliance_report_pdf(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Генерирует PDF-отчёт из готового результата проверки (приходит с фронтенда).
+
+    body: { "tenant_id": int | null, "check": { url, checked_at, compliance_percentage,
+            total_required, passed_required, checks } }
+    """
+    check_data = body.get("check") or {}
+    tenant_id = body.get("tenant_id")
+
+    if not check_data.get("url"):
+        raise HTTPException(status_code=400, detail="Не переданы данные проверки (check.url)")
+
+    # Реквизиты компании — если проверка привязана к компании
+    company_data = {}
+    if tenant_id:
+        tenant = db.query(models.Tenant).filter(
+            models.Tenant.id == tenant_id,
+            models.Tenant.user_id == current_user.id,
+        ).first()
+        if tenant:
+            company_data = {"name": tenant.name, "inn": tenant.inn}
+
+    try:
+        pdf_bytes = bytes(
+            document_generator.generate_compliance_report_pdf(company_data, check_data)
+        )
+    except Exception as e:
+        import traceback
+        print("COMPLIANCE REPORT PDF ERROR:\n", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Ошибка генерации PDF: {str(e)}")
+
+    # Имя файла — только ASCII (HTTP-заголовки не умеют в кириллицу)
+    date_str = datetime.now().strftime('%Y%m%d_%H%M')
+    filename = f"compliance_report_{tenant_id or 'site'}_{date_str}.pdf"
+
+    # Сохраняем в историю документов
+    history = models.DocumentHistory(
+        user_id=current_user.id,
+        tenant_id=tenant_id if tenant_id else None,
+        document_type="compliance-report",
+        file_format="pdf",
+        filename=filename,
+    )
+    db.add(history)
+    db.commit()
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )    
