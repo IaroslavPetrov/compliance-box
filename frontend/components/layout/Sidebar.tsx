@@ -41,7 +41,7 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
   const navItems: NavItem[] = [
     { href: '/dashboard', label: 'Личный кабинет', icon: IconHome, exact: true },
     { href: '/dashboard/data-map', label: 'Карта обработки ПДн', icon: IconMap },
-    { href: '/dashboard/doc-tree', label: 'Дерево процессов', icon: IconTree },
+    { href: tenantId ? `/dashboard/doc-tree?tenantId=${tenantId}` : '/dashboard/doc-tree', label: 'Дерево процессов', icon: IconTree },
     { href: tenantId ? `/dashboard/registry?tenantId=${tenantId}` : '/dashboard/registry', label: 'Реестр ПДн', icon: IconUsers },
     { href: tenantId ? `/dashboard/subject-requests?tenantId=${tenantId}` : '/dashboard/subject-requests', label: 'Запросы субъектов', icon: IconClipboard },
     { href: tenantId ? `/dashboard/documents?tenantId=${tenantId}` : '/dashboard/documents', label: 'Документы', icon: IconFileText },

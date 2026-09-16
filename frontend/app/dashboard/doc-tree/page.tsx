@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { useToast } from '../../../contexts/ToastContext';
+import { useTenant } from '../../../contexts/TenantContext';
 import { IconTree, IconUsers, IconMap, IconFileText, IconClipboard, IconAlert } from '../../../components/icons';
 
 const API = 'https://compliance-box-backend.onrender.com/api/v1';
@@ -106,21 +107,31 @@ export default function DocTreePage() {
   const tenantId = searchParams.get('tenantId');
   const isMobile = useIsMobile();
   const toast = useToast();
+  const { currentTenant } = useTenant();
 
   const [subjects, setSubjects] = useState<PdSubject[]>([]);
   const [systems, setSystems] = useState<DataSystem[]>([]);
   const [docs, setDocs] = useState<DocumentHistory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retry, setRetry] = useState(0);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ hr: true });
 
-  // Стабильная ссылка на toast, чтобы не зацикливать useEffect
   const toastRef = useRef(toast);
   toastRef.current = toast;
+
+  // Если зашли без tenantId, но компания выбрана в кабинете — подставляем её в URL
+  useEffect(() => {
+    if (!tenantId && currentTenant) {
+      router.replace(`/dashboard/doc-tree?tenantId=${currentTenant.id}`);
+    }
+  }, [tenantId, currentTenant, router]);
 
   useEffect(() => {
     if (!tenantId) return;
     let cancelled = false;
     setLoading(true);
+    setLoadError(false);
     const token = localStorage.getItem('token');
     if (!token) {
       router.push('/login');
@@ -139,7 +150,9 @@ export default function DocTreePage() {
         setDocs(Array.isArray(d) ? d : []);
       })
       .catch(err => {
-        if (!cancelled) toastRef.current.error('Не удалось загрузить данные: ' + err.message);
+        if (cancelled) return;
+        setLoadError(true);
+        toastRef.current.error('Не удалось загрузить данные: ' + err.message);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -149,7 +162,7 @@ export default function DocTreePage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId]);
+  }, [tenantId, retry]);
 
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
 
@@ -204,7 +217,7 @@ export default function DocTreePage() {
   const totalSubjects = subjects.length;
   const totalDocs = new Set(docs.map(d => d.template_id)).size;
 
-  if (!tenantId) {
+  if (!tenantId && !currentTenant) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -237,6 +250,45 @@ export default function DocTreePage() {
         padding: '1rem',
       }}>
         <p style={{ fontSize: '1.2rem' }}>Загрузка дерева процессов...</p>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: '1rem',
+        background: '#0A0A0A',
+        color: '#A0A0A0',
+        padding: '1rem',
+        textAlign: 'center',
+      }}>
+        <span style={{ color: '#FF4444', display: 'inline-flex' }}>
+          <IconAlert size={36} strokeWidth={1.5} />
+        </span>
+        <p style={{ fontSize: '1.05rem', margin: 0, maxWidth: '480px', lineHeight: 1.5 }}>
+          Не удалось загрузить данные компании. Сервер мог «уснуть» или сеть недоступна (проверь VPN).
+        </p>
+        <button
+          onClick={() => setRetry(r => r + 1)}
+          style={{
+            padding: '0.7rem 1.5rem',
+            background: '#FF6B35',
+            border: 'none',
+            borderRadius: '8px',
+            color: '#FFFFFF',
+            fontSize: '0.95rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          Повторить загрузку
+        </button>
       </div>
     );
   }
