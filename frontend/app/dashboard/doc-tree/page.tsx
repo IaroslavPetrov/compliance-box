@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { useToast } from '../../../contexts/ToastContext';
@@ -113,23 +113,43 @@ export default function DocTreePage() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ hr: true });
 
+  // Стабильная ссылка на toast, чтобы не зацикливать useEffect
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+
   useEffect(() => {
     if (!tenantId) return;
+    let cancelled = false;
     setLoading(true);
     const token = localStorage.getItem('token');
-    if (!token) { router.push('/login'); return; }
+    if (!token) {
+      router.push('/login');
+      return;
+    }
 
     Promise.all([
       fetch(`${API}/pd-subjects/?tenant_id=${tenantId}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
-      fetch(`${API}/data-systems/?tenant_id=${tenantId}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.ok ? r.json() : []),
-      fetch(`${API}/documents/history?tenant_id=${tenantId}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.ok ? r.json() : []),
-    ]).then(([s, sys, d]) => {
-      setSubjects(Array.isArray(s) ? s : []);
-      setSystems(Array.isArray(sys) ? sys : []);
-      setDocs(Array.isArray(d) ? d : []);
-    }).catch(err => toast.error('Не удалось загрузить данные: ' + err.message))
-      .finally(() => setLoading(false));
-  }, [tenantId, router, toast]);
+      fetch(`${API}/data-systems/?tenant_id=${tenantId}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => (r.ok ? r.json() : [])),
+      fetch(`${API}/documents/history?tenant_id=${tenantId}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => (r.ok ? r.json() : [])),
+    ])
+      .then(([s, sys, d]) => {
+        if (cancelled) return;
+        setSubjects(Array.isArray(s) ? s : []);
+        setSystems(Array.isArray(sys) ? sys : []);
+        setDocs(Array.isArray(d) ? d : []);
+      })
+      .catch(err => {
+        if (!cancelled) toastRef.current.error('Не удалось загрузить данные: ' + err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId]);
 
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
 
@@ -250,7 +270,6 @@ export default function DocTreePage() {
           </p>
         </div>
 
-        {/* Сводка */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
@@ -291,7 +310,6 @@ export default function DocTreePage() {
           ))}
         </div>
 
-        {/* Дерево процессов */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           {PROCESSES.map((proc) => {
             const isOpen = !!expanded[proc.id];
@@ -335,11 +353,7 @@ export default function DocTreePage() {
                       <path d="M9 6l6 6-6 6" />
                     </svg>
                   </span>
-                  <span style={{
-                    display: 'inline-flex',
-                    color: '#A0A0A0',
-                    flexShrink: 0,
-                  }}>
+                  <span style={{ display: 'inline-flex', color: '#A0A0A0', flexShrink: 0 }}>
                     <proc.icon size={18} strokeWidth={1.8} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -358,7 +372,6 @@ export default function DocTreePage() {
                     paddingTop: '1rem',
                   }}>
 
-                    {/* Документы */}
                     {proc.documents.length > 0 && (
                       <div>
                         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#A0A0A0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
@@ -393,7 +406,6 @@ export default function DocTreePage() {
                       </div>
                     )}
 
-                    {/* Информационные системы */}
                     {proc.categories.length > 0 && (
                       <div>
                         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#A0A0A0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
@@ -438,7 +450,6 @@ export default function DocTreePage() {
                       </div>
                     )}
 
-                    {/* Субъекты ПДн */}
                     {proc.categories.length > 0 && (
                       <div>
                         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#A0A0A0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
@@ -488,7 +499,6 @@ export default function DocTreePage() {
                       </div>
                     )}
 
-                    {/* Регулятор */}
                     {proc.id === 'regulator' && (
                       <div>
                         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#A0A0A0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
