@@ -1601,7 +1601,8 @@ def _unified_get_current_user(
 app.dependency_overrides[get_current_user] = _unified_get_current_user
 
 # ============================================================================
-# MCP-СЕРВЕР: монтирование /mcp для AI-ассистентов (безопасно: try/except)
+# MCP-СЕРВЕР: монтирование /mcp для AI-ассистентов (БЕЗОПАСНО: при любой
+# несовместимости SDK приложение стартует без MCP)
 # ============================================================================
 from contextlib import asynccontextmanager
 
@@ -1612,18 +1613,17 @@ except Exception as _mcp_err:  # noqa: BLE001
     print("MCP disabled (import error):", _mcp_err)
 
 if _mcp is not None:
-    _original_lifespan = app.router.lifespan_context
-
-    @asynccontextmanager
-    async def _combined_lifespan(app_instance):
-        async with _original_lifespan(app_instance):
-            async with _mcp.session_manager.run():
-                yield
-
-    app.router.lifespan_context = _combined_lifespan
-
     try:
         _mcp_starlette = _mcp.streamable_http_app()
+        _original_lifespan = app.router.lifespan_context
+
+        @asynccontextmanager
+        async def _combined_lifespan(app_instance):
+            async with _original_lifespan(app_instance):
+                async with _mcp.session_manager.run():
+                    yield
+
+        app.router.lifespan_context = _combined_lifespan
         for _route in _mcp_starlette.routes:
             app.router.routes.append(_route)
         print("MCP server mounted at /mcp")
