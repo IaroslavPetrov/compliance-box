@@ -1572,3 +1572,30 @@ def send_compliance_report_email(
     db.add(history)
     db.commit()
     return {"message": f"Отчёт отправлен на {email_to}"}
+
+# ============================================================================
+# API-ТОКЕНЫ: роутер + единая авторизация (JWT или cbx_-токен)
+# ============================================================================
+from app import api_tokens as _api_tokens
+
+app.include_router(_api_tokens.router)
+
+
+def _unified_get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    """Все эндпоинты принимают и JWT, и персональные API-токены cbx_..."""
+    if token.startswith(_api_tokens.TOKEN_PREFIX):
+        user = _api_tokens.authenticate_api_token(token, db)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Недействительный или отозванный API-токен",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return user
+    return get_current_user(token=token, db=db)
+
+
+app.dependency_overrides[get_current_user] = _unified_get_current_user

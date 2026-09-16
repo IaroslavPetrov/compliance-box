@@ -149,3 +149,20 @@ class SubjectRequest(Base):
     tenant = relationship("Tenant", back_populates="subject_requests")
     user = relationship("User", back_populates="subject_requests")
     linked_subject = relationship("PdSubject", back_populates="subject_requests")
+
+# ============================================================================
+# ПЕРСОНАЛЬНЫЕ API-ТОКЕНЫ (для интеграций и MCP)
+# ============================================================================
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    name = Column(String)
+    token_hash = Column(String, index=True)   # sha256; сам токен не храним
+    token_prefix = Column(String)             # первые символы для отображения
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")
