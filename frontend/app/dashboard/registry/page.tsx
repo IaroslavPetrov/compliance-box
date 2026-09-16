@@ -45,6 +45,12 @@ interface DataSystem {
   is_active: boolean;
 }
 
+interface ImportResult {
+  created: number;
+  limit_blocked: number;
+  total_in_file: number;
+}
+
 const CATEGORIES = [
   'Сотрудник',
   'Клиент',
@@ -101,6 +107,12 @@ export default function RegistryPage() {
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // ===== ИМПОРТ ИЗ EXCEL/CSV =====
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!tenantId) return;
@@ -301,6 +313,77 @@ export default function RegistryPage() {
     }
   };
 
+  // ===== ИМПОРТ: скачивание шаблона CSV с BOM для Excel =====
+  const downloadTemplate = () => {
+    const csv = '\uFEFFФИО,категория,основание,данные\nИванов Иван Иванович,Сотрудник,Трудовой договор,ФИО+СНИЛС\nПетров Пётр Петрович,Клиент,Согласие субъекта,ФИО+email+телефон\nСидорова Анна Михайловна,Кандидат,Согласие субъекта,ФИО+резюме\n';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'compliancebox_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+    toast.success('Шаблон CSV скачан');
+  };
+
+  // ===== ИМПОРТ: отправка файла на бэкенд =====
+  const handleImport = async () => {
+    if (!importFile) {
+      toast.warning('Выберите файл .csv или .xlsx');
+      return;
+    }
+    if (!tenantId) return;
+
+    setImporting(true);
+    setImportResult(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      const fd = new FormData();
+      fd.append('file', importFile);
+
+      const res = await fetch(
+        `https://compliance-box-backend.onrender.com/api/v1/pd-subjects/import?tenant_id=${tenantId}`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: fd,
+        }
+      );
+
+      if (!res.ok) {
+        const e = await res.json().catch(() => null);
+        throw new Error(e?.detail || 'Ошибка импорта');
+      }
+
+      const data: ImportResult = await res.json();
+      setImportResult(data);
+      posthog.capture('pd_subjects_imported', {
+        created: data.created,
+        limit_blocked: data.limit_blocked,
+        total: data.total_in_file,
+      });
+      if (data.created > 0) {
+        toast.success(`Импортировано записей: ${data.created}`);
+        await fetchData();
+      } else {
+        toast.warning('Ни одна запись не была импортирована');
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const closeImportModal = () => {
+    setImportModalOpen(false);
+    setImportFile(null);
+    setImportResult(null);
+  };
+
   const inputStyle = {
     width: '100%',
     padding: '0.875rem',
@@ -488,37 +571,69 @@ export default function RegistryPage() {
             Записи ({subjects.length})
           </h2>
 
-          <button
-            onClick={openAddModal}
-            disabled={limits?.is_limit_reached}
-            style={{
-              padding: '0.75rem 1.5rem',
-              background: limits?.is_limit_reached ? '#4A4A4A' : '#FF6B35',
-              color: '#FFFFFF',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: limits?.is_limit_reached ? 'not-allowed' : 'pointer',
-              fontWeight: '600',
-              fontSize: '0.95rem',
-              transition: 'background 0.3s',
-              width: isMobile ? '100%' : 'auto',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-            }}
-            onMouseEnter={(e) => {
-              if (!limits?.is_limit_reached) {
-                e.currentTarget.style.background = '#E55A2B';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = limits?.is_limit_reached ? '#4A4A4A' : '#FF6B35';
-            }}
-          >
-            <IconPlus />
-            Добавить субъекта
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem', flexDirection: isMobile ? 'column' : 'row' }}>
+            <button
+              onClick={() => setImportModalOpen(true)}
+              style={{
+                padding: '0.75rem 1.25rem',
+                background: 'transparent',
+                color: '#4A90E2',
+                border: '1px solid #4A90E2',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '0.95rem',
+                transition: 'all 0.3s',
+                width: isMobile ? '100%' : 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#4A90E2';
+                e.currentTarget.style.color = '#FFFFFF';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = '#4A90E2';
+              }}
+            >
+              📥 Импорт из Excel
+            </button>
+
+            <button
+              onClick={openAddModal}
+              disabled={limits?.is_limit_reached}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: limits?.is_limit_reached ? '#4A4A4A' : '#FF6B35',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: limits?.is_limit_reached ? 'not-allowed' : 'pointer',
+                fontWeight: '600',
+                fontSize: '0.95rem',
+                transition: 'background 0.3s',
+                width: isMobile ? '100%' : 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+              }}
+              onMouseEnter={(e) => {
+                if (!limits?.is_limit_reached) {
+                  e.currentTarget.style.background = '#E55A2B';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = limits?.is_limit_reached ? '#4A4A4A' : '#FF6B35';
+              }}
+            >
+              <IconPlus />
+              Добавить субъекта
+            </button>
+          </div>
         </div>
 
         {/* Таблица */}
@@ -543,27 +658,49 @@ export default function RegistryPage() {
               В реестре пока нет записей
             </p>
 
-            <button
-              onClick={openAddModal}
-              disabled={limits?.is_limit_reached}
-              style={{
-                padding: '0.75rem 1.5rem',
-                background: limits?.is_limit_reached ? '#4A4A4A' : '#FF6B35',
-                color: '#FFFFFF',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: limits?.is_limit_reached ? 'not-allowed' : 'pointer',
-                fontWeight: '600',
-                width: isMobile ? '100%' : 'auto',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-              }}
-            >
-              <IconPlus />
-              Добавить первую запись
-            </button>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexDirection: isMobile ? 'column' : 'row' }}>
+              <button
+                onClick={() => setImportModalOpen(true)}
+                style={{
+                  padding: '0.75rem 1.25rem',
+                  background: 'transparent',
+                  color: '#4A90E2',
+                  border: '1px solid #4A90E2',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#4A90E2'; e.currentTarget.style.color = '#FFFFFF'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#4A90E2'; }}
+              >
+                📥 Импорт из Excel
+              </button>
+
+              <button
+                onClick={openAddModal}
+                disabled={limits?.is_limit_reached}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  background: limits?.is_limit_reached ? '#4A4A4A' : '#FF6B35',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: limits?.is_limit_reached ? 'not-allowed' : 'pointer',
+                  fontWeight: '600',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                <IconPlus />
+                Добавить первую запись
+              </button>
+            </div>
           </div>
         ) : (
           <div style={{
@@ -1040,6 +1177,199 @@ export default function RegistryPage() {
                 }}
               >
                 Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== МОДАЛКА ИМПОРТА ИЗ EXCEL/CSV ===== */}
+      {importModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+            padding: isMobile ? '1rem' : '2rem',
+          }}
+          onClick={closeImportModal}
+        >
+          <div
+            style={{
+              background: '#1A1A1A',
+              borderRadius: '12px',
+              padding: isMobile ? '1.5rem' : '2rem',
+              maxWidth: '520px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              border: '1px solid #2A2A2A',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1.5rem',
+            }}>
+              <h2 style={{
+                margin: 0,
+                fontSize: isMobile ? '1.25rem' : '1.5rem',
+                fontWeight: '700',
+                color: '#FFFFFF',
+              }}>
+                📥 Импорт из Excel / CSV
+              </h2>
+              <button
+                onClick={closeImportModal}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#A0A0A0',
+                  cursor: 'pointer',
+                  lineHeight: 1,
+                  display: 'inline-flex',
+                  padding: '0.25rem',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#FF4444'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = '#A0A0A0'; }}
+                aria-label="Закрыть"
+              >
+                <IconClose />
+              </button>
+            </div>
+
+            {/* Выбор файла */}
+            <div style={{
+              padding: '1.25rem',
+              background: '#0A0A0A',
+              border: '1px dashed #3A3A3A',
+              borderRadius: '8px',
+              textAlign: 'center',
+              marginBottom: '1rem',
+            }}>
+              <input
+                type="file"
+                accept=".csv,.xlsx"
+                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                style={{
+                  width: '100%',
+                  color: '#A0A0A0',
+                  fontSize: '0.9rem',
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              />
+              {importFile && (
+                <p style={{ margin: '0.75rem 0 0', color: '#00C853', fontSize: '0.9rem', fontWeight: 600 }}>
+                  Выбран файл: {importFile.name}
+                </p>
+              )}
+            </div>
+
+            {/* Шаблон */}
+            <button
+              onClick={downloadTemplate}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                background: 'transparent',
+                border: '1px dashed #3A3A3A',
+                borderRadius: '8px',
+                color: '#A0A0A0',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                marginBottom: '1rem',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4A90E2'; e.currentTarget.style.color = '#4A90E2'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#3A3A3A'; e.currentTarget.style.color = '#A0A0A0'; }}
+            >
+              ⬇ Скачать шаблон CSV
+            </button>
+
+            <p style={{
+              margin: '0 0 1rem',
+              fontSize: '0.8rem',
+              color: '#666',
+              lineHeight: 1.5,
+            }}>
+              Первая строка файла — заголовки: <strong style={{ color: '#A0A0A0' }}>ФИО, категория, основание, данные</strong>.
+              Колонки могут идти в любом порядке, лишние игнорируются. Поддерживаются .csv и .xlsx.
+            </p>
+
+            {/* Результат импорта */}
+            {importResult && (
+              <div style={{
+                padding: '1rem',
+                background: importResult.limit_blocked > 0 ? 'rgba(255, 193, 7, 0.1)' : 'rgba(0, 200, 83, 0.1)',
+                border: `1px solid ${importResult.limit_blocked > 0 ? '#FFC107' : '#00C853'}`,
+                borderRadius: '8px',
+                marginBottom: '1rem',
+                fontSize: '0.9rem',
+                lineHeight: 1.5,
+                color: '#E0E0E0',
+              }}>
+                ✅ Создано записей: <strong>{importResult.created}</strong> из {importResult.total_in_file}
+                {importResult.limit_blocked > 0 && (
+                  <>
+                    <br />
+                    ⚠️ Не импортировано из-за лимита тарифа: <strong>{importResult.limit_blocked}</strong>. Обновите тариф для снятия ограничений.
+                  </>
+                )}
+              </div>
+            )}
+
+            <div style={{
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: '0.75rem',
+            }}>
+              <button
+                onClick={handleImport}
+                disabled={importing || !importFile}
+                style={{
+                  flex: 1,
+                  padding: '0.875rem',
+                  background: importing || !importFile ? '#4A4A4A' : '#4A90E2',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  cursor: importing || !importFile ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {importing ? 'Импортируем...' : 'Импортировать'}
+              </button>
+
+              <button
+                onClick={closeImportModal}
+                disabled={importing}
+                style={{
+                  flex: 1,
+                  padding: '0.875rem',
+                  background: '#2A2A2A',
+                  color: '#FFFFFF',
+                  border: '1px solid #3A3A3A',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  cursor: importing ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Закрыть
               </button>
             </div>
           </div>
