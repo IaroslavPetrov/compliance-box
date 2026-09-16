@@ -13,6 +13,7 @@ import {
   IconPlus,
   IconShield,
   IconClipboard,
+  IconTree,
 } from '../icons';
 
 type IconComponent = React.ComponentType<{ size?: number; strokeWidth?: number }>;
@@ -40,6 +41,7 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
   const navItems: NavItem[] = [
     { href: '/dashboard', label: 'Личный кабинет', icon: IconHome, exact: true },
     { href: '/dashboard/data-map', label: 'Карта обработки ПДн', icon: IconMap },
+    { href: '/dashboard/doc-tree', label: 'Дерево процессов', icon: IconTree },
     { href: tenantId ? `/dashboard/registry?tenantId=${tenantId}` : '/dashboard/registry', label: 'Реестр ПДн', icon: IconUsers },
     { href: tenantId ? `/dashboard/subject-requests?tenantId=${tenantId}` : '/dashboard/subject-requests', label: 'Запросы субъектов', icon: IconClipboard },
     { href: tenantId ? `/dashboard/documents?tenantId=${tenantId}` : '/dashboard/documents', label: 'Документы', icon: IconFileText },
@@ -54,7 +56,6 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
     router.push('/login');
   };
 
-  // Смена компании в селекторе
   const handleTenantChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = Number(e.target.value);
     const t = tenants.find((x) => x.id === id);
@@ -62,13 +63,13 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
 
     selectTenant(t);
 
-    // Если открыта страница, привязанная к компании — синхронизируем URL
     if (
       pathname.startsWith('/dashboard/registry') ||
       pathname.startsWith('/dashboard/documents') ||
-      pathname.startsWith('/dashboard/subject-requests')
+      pathname.startsWith('/dashboard/subject-requests') ||
+      pathname.startsWith('/dashboard/doc-tree')
     ) {
-      router.replace(`${pathname}?tenantId=${t.id}`);
+      router.replace(`${pathname.split('?')[0]}?tenantId=${t.id}`);
     }
 
     onClose();
@@ -83,7 +84,6 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
       gap: '1.5rem',
       boxSizing: 'border-box',
     }}>
-      {/* Логотип */}
       <div
         onClick={() => { router.push('/dashboard'); onClose(); }}
         style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}
@@ -96,7 +96,6 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
         </span>
       </div>
 
-      {/* Селектор компании */}
       <div style={{ flexShrink: 0 }}>
         <label style={{
           display: 'block',
@@ -156,7 +155,6 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
         </button>
       </div>
 
-      {/* Навигация */}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1, overflowY: 'auto' }}>
         {navItems.map((item) => {
           const active = isActive(item);
@@ -194,7 +192,6 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
         })}
       </nav>
 
-      {/* Выход */}
       <button
         onClick={handleLogout}
         style={{
@@ -221,7 +218,6 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
     </div>
   );
 
-  // Десктоп: фиксированная колонка слева
   if (!isMobile) {
     return (
       <aside style={{
@@ -240,7 +236,6 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
     );
   }
 
-  // Мобильный: выдвижная панель (drawer)
   return (
     <>
       {open && (

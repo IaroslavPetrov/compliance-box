@@ -173,3 +173,11 @@ export const IconMenu = (p: IconProps) => (
     <line x1="3" y1="18" x2="21" y2="18" />
   </Svg>
 );
+export const IconTree: IconComponent = ({ size = 16, strokeWidth = 1.8 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="2" width="6" height="4" rx="1" />
+    <rect x="2" y="18" width="6" height="4" rx="1" />
+    <rect x="16" y="18" width="6" height="4" rx="1" />
+    <path d="M12 6v4M12 10l-7 4v4M12 10l7 4v4" />
+  </svg>
+);
