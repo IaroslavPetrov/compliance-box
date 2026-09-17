@@ -44,17 +44,16 @@ interface ProcessNode {
 }
 
 type Selection =
-  | { kind: 'company' }
+  | { kind: 'doc'; docId: string }
   | { kind: 'process'; procId: string }
-  | { kind: 'doc'; procId: string; docId: string }
-  | { kind: 'system'; procId: string; systemId: number }
-  | { kind: 'subject'; procId: string; subjectId: number }
+  | { kind: 'sysgroup'; procId: string }
+  | { kind: 'peoplegroup'; procId: string }
   | { kind: 'regulator' };
 
 const PROCESSES: ProcessNode[] = [
   {
     id: 'hr',
-    label: 'HR-процесс (сотрудники)',
+    label: 'HR-процесс',
     emoji: '👔',
     categories: ['Сотрудник'],
     documents: ['policy', 'consent', 'nda', 'order_responsible'],
@@ -62,7 +61,7 @@ const PROCESSES: ProcessNode[] = [
   },
   {
     id: 'sales',
-    label: 'Продажи и услуги (клиенты)',
+    label: 'Продажи и услуги',
     emoji: '🛒',
     categories: ['Клиент'],
     documents: ['policy', 'consent', 'nda'],
@@ -70,7 +69,7 @@ const PROCESSES: ProcessNode[] = [
   },
   {
     id: 'candidates',
-    label: 'Подбор персонала (кандидаты)',
+    label: 'Подбор персонала',
     emoji: '🧑‍💼',
     categories: ['Кандидат'],
     documents: ['policy', 'consent'],
@@ -78,7 +77,7 @@ const PROCESSES: ProcessNode[] = [
   },
   {
     id: 'website',
-    label: 'Сайт и маркетинг (посетители)',
+    label: 'Сайт и маркетинг',
     emoji: '🌐',
     categories: ['Посетитель сайта'],
     documents: ['policy'],
@@ -89,7 +88,7 @@ const PROCESSES: ProcessNode[] = [
     label: 'Контрагенты',
     emoji: '🤝',
     categories: ['Контрагент'],
-    documents: ['nda'],
+    documents: ['policy', 'nda'],
     description: 'Партнёры, поставщики, юрлица',
   },
 ];
@@ -103,7 +102,7 @@ const DOCUMENT_LABELS: Record<string, string> = {
 };
 
 const DOCUMENT_HINTS: Record<string, string> = {
-  policy: 'Главный публичный документ: описывает, какие данные и зачем обрабатывает компания. Обязательно публикуется на сайте.',
+  policy: 'Главный публичный документ компании: описывает, какие данные и зачем обрабатываются. Обязательно публикуется на сайте. От неё «растут» все остальные документы и процессы.',
   consent: 'Письменное или электронное разрешение субъекта на обработку его персональных данных.',
   nda: 'Защищает персональные данные и коммерческую тайну при работе с сотрудниками и партнёрами.',
   order_responsible: 'Назначает в компании ответственного за организацию обработки ПДн (требование 152-ФЗ).',
@@ -131,8 +130,7 @@ export default function DocTreePage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [retry, setRetry] = useState(0);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ hr: true, 'hr:docs': true });
-  const [selection, setSelection] = useState<Selection>({ kind: 'company' });
+  const [selection, setSelection] = useState<Selection>({ kind: 'doc', docId: 'policy' });
 
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -209,56 +207,50 @@ export default function DocTreePage() {
   const procDocsReady = (proc: ProcessNode) =>
     proc.documents.filter(docId => generatedTemplates.has(docId));
 
-  const progressColor = (pct: number) => (pct >= 70 ? '#00C853' : pct >= 40 ? '#FFC107' : '#FF4444');
-
-  const ProgressBar = ({ ready, total }: { ready: number; total: number }) => {
-    const pct = total === 0 ? 0 : Math.round((ready / total) * 100);
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '110px' }}>
-        <div style={{ flex: 1, height: '6px', background: '#2A2A2A', borderRadius: '3px', overflow: 'hidden' }}>
-          <div style={{ width: `${pct}%`, height: '100%', background: progressColor(pct), transition: 'width 0.3s' }} />
-        </div>
-        <span style={{ fontSize: '0.72rem', color: '#A0A0A0', whiteSpace: 'nowrap' }}>
-          {ready} из {total}
-        </span>
-      </div>
-    );
-  };
-
-  const toggle = (key: string) => setExpanded(p => ({ ...p, [key]: !p[key] }));
   const isSelected = (sel: Selection) => JSON.stringify(sel) === JSON.stringify(selection);
 
-  const rowStyle = (depth: number, sel: Selection) => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.45rem',
-    padding: '0.42rem 0.6rem',
-    paddingLeft: `${0.6 + depth * 0.9}rem`,
-    background: isSelected(sel) ? 'rgba(255, 107, 53, 0.15)' : 'transparent',
-    color: isSelected(sel) ? '#FF6B35' : '#D0D0D0',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '0.88rem',
-    fontWeight: isSelected(sel) ? 600 : 400,
-    border: 'none',
-    width: '100%',
-    textAlign: 'left' as const,
-    transition: 'background 0.15s',
-  });
-
-  const Chevron = ({ open }: { open: boolean }) => (
-    <span style={{
-      display: 'inline-flex',
-      color: '#666',
-      transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
-      transition: 'transform 0.15s',
-      flexShrink: 0,
-    }}>
-      <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M9 6l6 6-6 6" />
-      </svg>
-    </span>
-  );
+  // Узел диаграммы
+  const Node = ({ sel, onClick, emoji, label, sub, subColor, dashed }: {
+    sel: Selection;
+    onClick: () => void;
+    emoji: string;
+    label: string;
+    sub?: string;
+    subColor?: string;
+    dashed?: boolean;
+  }) => {
+    const active = isSelected(sel);
+    return (
+      <button
+        onClick={onClick}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '2px',
+          minWidth: '128px',
+          maxWidth: '170px',
+          padding: '0.55rem 0.7rem',
+          background: active ? 'rgba(255, 107, 53, 0.12)' : '#1A1A1A',
+          border: dashed ? '1px dashed #FF4444' : `1px solid ${active ? '#FF6B35' : '#2A2A2A'}`,
+          borderRadius: '10px',
+          color: active ? '#FF6B35' : '#D0D0D0',
+          fontSize: '0.78rem',
+          fontWeight: active ? 700 : 500,
+          lineHeight: 1.25,
+          cursor: 'pointer',
+          textAlign: 'center',
+          transition: 'border-color 0.15s, background 0.15s',
+        }}
+      >
+        <span style={{ fontSize: '1.05rem' }}>{emoji}</span>
+        <span>{label}</span>
+        {sub && (
+          <span style={{ fontSize: '0.68rem', fontWeight: 700, color: subColor || '#666' }}>{sub}</span>
+        )}
+      </button>
+    );
+  };
 
   // ------------------------------------------------------------------
   // ПРАВАЯ ПАНЕЛЬ
@@ -280,72 +272,11 @@ export default function DocTreePage() {
       fontWeight: 700,
       cursor: 'pointer',
     };
-    const btnGhost: React.CSSProperties = {
-      padding: '0.6rem 1.1rem',
-      background: 'transparent',
-      border: '1px solid #3A3A3A',
-      borderRadius: '8px',
-      color: '#A0A0A0',
-      fontSize: '0.9rem',
-      fontWeight: 600,
-      cursor: 'pointer',
-    };
     const Label = ({ children }: { children: React.ReactNode }) => (
       <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '0.9rem', marginBottom: '0.25rem' }}>
         {children}
       </div>
     );
-
-    if (selection.kind === 'company') {
-      const totalDocs = PROCESSES.reduce((acc, p) => acc + p.documents.length, 0);
-      const readyDocs = PROCESSES.reduce((acc, p) => acc + procDocsReady(p).length, 0);
-      return (
-        <div style={card}>
-          <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>🏢 {currentTenant?.name || 'Компания'}</div>
-          <Label>Общая готовность документов</Label>
-          <ProgressBar ready={readyDocs} total={totalDocs} />
-          <Label>В цифрах</Label>
-          <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', fontSize: '0.92rem', color: '#D0D0D0' }}>
-            <span>🖥 Систем: <b>{systems.filter(s => s.is_active).length}</b></span>
-            <span>👥 Субъектов: <b>{subjects.length}</b></span>
-            <span>📄 Документов сгенерировано: <b>{generatedTemplates.size}</b></span>
-          </div>
-          <Label>Как читать дерево</Label>
-          <p style={{ fontSize: '0.88rem', lineHeight: 1.55, color: '#A0A0A0', margin: 0 }}>
-            Слева — папки процессов компании. Раскрывайте их: внутри документы, информационные системы и люди,
-            чьи данные обрабатываются. Зелёная галочка — документ готов, красный крестик — ещё нет.
-            Кликните по любому пункту, чтобы увидеть подробности и кнопку действия.
-          </p>
-        </div>
-      );
-    }
-
-    if (selection.kind === 'process') {
-      const proc = PROCESSES.find(p => p.id === selection.procId);
-      if (!proc) return null;
-      const ready = procDocsReady(proc);
-      return (
-        <div style={card}>
-          <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>{proc.emoji} {proc.label}</div>
-          <p style={{ fontSize: '0.9rem', color: '#A0A0A0', lineHeight: 1.5 }}>{proc.description}</p>
-          <Label>Готовность документов</Label>
-          <ProgressBar ready={ready.length} total={proc.documents.length} />
-          <Label>Связанные данные</Label>
-          <div style={{ fontSize: '0.92rem', color: '#D0D0D0', display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
-            <span>🖥 Систем: <b>{procSystems(proc).length}</b></span>
-            <span>👥 Людей: <b>{procSubjects(proc).length}</b></span>
-          </div>
-          <div style={{ display: 'flex', gap: '0.6rem', marginTop: '1.1rem', flexWrap: 'wrap' }}>
-            <button style={btnPrimary} onClick={() => router.push(`/dashboard/documents?tenantId=${tenantId}`)}>
-              К документам
-            </button>
-            <button style={btnGhost} onClick={() => router.push(`/dashboard/registry?tenantId=${tenantId}`)}>
-              К реестру
-            </button>
-          </div>
-        </div>
-      );
-    }
 
     if (selection.kind === 'doc') {
       const ready = generatedTemplates.has(selection.docId);
@@ -370,48 +301,125 @@ export default function DocTreePage() {
       );
     }
 
-    if (selection.kind === 'system') {
-      const sys = systems.find(s => s.id === selection.systemId);
-      if (!sys) return null;
+    if (selection.kind === 'process') {
+      const proc = PROCESSES.find(p => p.id === selection.procId);
+      if (!proc) return null;
+      const ready = procDocsReady(proc);
+      const pSys = procSystems(proc);
+      const pSubj = procSubjects(proc);
       return (
         <div style={card}>
-          <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>🖥 {sys.name}</div>
-          <Label>Тип системы</Label>
-          <div style={{ fontSize: '0.92rem', color: '#D0D0D0' }}>{SYSTEM_TYPE_LABELS[sys.system_type] || sys.system_type}</div>
-          <Label>Категории субъектов</Label>
-          <div style={{ fontSize: '0.92rem', color: '#D0D0D0' }}>{(sys.categories || []).join(', ') || '—'}</div>
-          {sys.data_location && (
-            <>
-              <Label>Где хранятся данные</Label>
-              <div style={{ fontSize: '0.92rem', color: '#D0D0D0' }}>{sys.data_location}</div>
-            </>
-          )}
-          <div style={{ marginTop: '1.1rem' }}>
-            <button style={btnPrimary} onClick={() => router.push('/dashboard/data-map')}>
-              Открыть в Карте обработки
+          <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>{proc.emoji} {proc.label}</div>
+          <p style={{ fontSize: '0.9rem', color: '#A0A0A0', lineHeight: 1.5 }}>{proc.description}</p>
+          <Label>Готовность документов</Label>
+          <div style={{ fontSize: '0.92rem', color: '#D0D0D0', fontWeight: 600 }}>
+            {ready.length} из {proc.documents.length}
+          </div>
+          <Label>Связанные данные</Label>
+          <div style={{ fontSize: '0.92rem', color: '#D0D0D0', display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
+            <span>🖥 Систем: <b>{pSys.length}</b></span>
+            <span>👥 Людей: <b>{pSubj.length}</b></span>
+          </div>
+          <div style={{ display: 'flex', gap: '0.6rem', marginTop: '1.1rem', flexWrap: 'wrap' }}>
+            <button style={btnPrimary} onClick={() => router.push(`/dashboard/documents?tenantId=${tenantId}`)}>
+              К документам
+            </button>
+            <button
+              style={{ ...btnPrimary, background: 'transparent', border: '1px solid #3A3A3A', color: '#A0A0A0' }}
+              onClick={() => router.push(`/dashboard/registry?tenantId=${tenantId}`)}
+            >
+              К реестру
             </button>
           </div>
         </div>
       );
     }
 
-    if (selection.kind === 'subject') {
-      const subj = subjects.find(s => s.id === selection.subjectId);
-      if (!subj) return null;
+    if (selection.kind === 'sysgroup') {
+      const proc = PROCESSES.find(p => p.id === selection.procId);
+      const pSys = proc ? procSystems(proc) : [];
       return (
         <div style={card}>
-          <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>👥 {subj.full_name}</div>
-          <Label>Категория</Label>
-          <div style={{ fontSize: '0.92rem', color: '#D0D0D0' }}>{subj.category}</div>
-          <Label>Основание обработки</Label>
-          <div style={{ fontSize: '0.92rem', color: '#D0D0D0' }}>{subj.legal_basis}</div>
-          <Label>Состав данных</Label>
-          <div style={{ fontSize: '0.92rem', color: '#D0D0D0' }}>{subj.data_types || '—'}</div>
-          <div style={{ marginTop: '1.1rem' }}>
-            <button style={btnPrimary} onClick={() => router.push(`/dashboard/registry?tenantId=${tenantId}`)}>
-              Открыть в Реестре
-            </button>
-          </div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>🖥 Информационные системы</div>
+          <p style={{ fontSize: '0.88rem', color: '#A0A0A0' }}>
+            Системы процесса «{proc?.label}», в которых обрабатываются данные категорий: {proc?.categories.join(', ')}
+          </p>
+          {pSys.length === 0 ? (
+            <>
+              <Label>Статус</Label>
+              <div style={{ fontSize: '0.92rem', color: '#FF4444', fontWeight: 600 }}>
+                Системы не заведены — данные обрабатываются «неучтённо», это риск при проверке
+              </div>
+              <div style={{ marginTop: '1.1rem' }}>
+                <button style={btnPrimary} onClick={() => router.push('/dashboard/data-map')}>
+                  Добавить систему
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <Label>Список систем</Label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {pSys.map(s => (
+                  <div key={s.id} style={{ border: '1px solid #2A2A2A', borderRadius: '8px', padding: '0.6rem 0.8rem' }}>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 600, color: '#D0D0D0' }}>{s.name}</div>
+                    <div style={{ fontSize: '0.78rem', color: '#666', marginTop: '2px' }}>
+                      {SYSTEM_TYPE_LABELS[s.system_type] || s.system_type}
+                      {s.data_location ? ` · ${s.data_location}` : ''}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: '1.1rem' }}>
+                <button style={btnPrimary} onClick={() => router.push('/dashboard/data-map')}>
+                  Открыть в Карте обработки
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      );
+    }
+
+    if (selection.kind === 'peoplegroup') {
+      const proc = PROCESSES.find(p => p.id === selection.procId);
+      const pSubj = proc ? procSubjects(proc) : [];
+      return (
+        <div style={card}>
+          <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>👥 Люди процесса</div>
+          <p style={{ fontSize: '0.88rem', color: '#A0A0A0' }}>
+            Субъекты ПДн процесса «{proc?.label}» ({pSubj.length})
+          </p>
+          {pSubj.length === 0 ? (
+            <>
+              <Label>Статус</Label>
+              <div style={{ fontSize: '0.92rem', color: '#FF4444', fontWeight: 600 }}>
+                Записей нет — реестр по этому процессу не ведётся
+              </div>
+              <div style={{ marginTop: '1.1rem' }}>
+                <button style={btnPrimary} onClick={() => router.push(`/dashboard/registry?tenantId=${tenantId}`)}>
+                  Добавить людей
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <Label>Список</Label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '320px', overflowY: 'auto' }}>
+                {pSubj.map(s => (
+                  <div key={s.id} style={{ border: '1px solid #2A2A2A', borderRadius: '8px', padding: '0.5rem 0.8rem', display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.88rem', color: '#D0D0D0' }}>{s.full_name}</span>
+                    <span style={{ fontSize: '0.75rem', color: '#FF6B35', fontWeight: 600, whiteSpace: 'nowrap' }}>{s.category}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: '1.1rem' }}>
+                <button style={btnPrimary} onClick={() => router.push(`/dashboard/registry?tenantId=${tenantId}`)}>
+                  Открыть в Реестре
+                </button>
+              </div>
+            </>
+          )}
         </div>
       );
     }
@@ -480,162 +488,8 @@ export default function DocTreePage() {
   }
 
   // ------------------------------------------------------------------
-  // ДЕРЕВО
+  // ДИАГРАММА
   // ------------------------------------------------------------------
-  const renderTree = () => (
-    <div style={{
-      background: '#141414',
-      border: '1px solid #2A2A2A',
-      borderRadius: '12px',
-      padding: '0.75rem',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '2px',
-    }}>
-      {/* Корень: компания */}
-      <button
-        style={rowStyle(0, { kind: 'company' })}
-        onClick={() => setSelection({ kind: 'company' })}
-        onMouseEnter={(e) => { if (!isSelected({ kind: 'company' })) e.currentTarget.style.background = '#1F1F1F'; }}
-        onMouseLeave={(e) => { if (!isSelected({ kind: 'company' })) e.currentTarget.style.background = 'transparent'; }}
-      >
-        <span style={{ flexShrink: 0 }}>🏢</span>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {currentTenant?.name || 'Компания'}
-        </span>
-      </button>
-
-      {PROCESSES.map(proc => {
-        const procOpen = !!expanded[proc.id];
-        const ready = procDocsReady(proc);
-        const pSubj = procSubjects(proc);
-        const pSys = procSystems(proc);
-        return (
-          <div key={proc.id}>
-            <button
-              style={rowStyle(1, { kind: 'process', procId: proc.id })}
-              onClick={() => { toggle(proc.id); setSelection({ kind: 'process', procId: proc.id }); }}
-              onMouseEnter={(e) => { if (!isSelected({ kind: 'process', procId: proc.id })) e.currentTarget.style.background = '#1F1F1F'; }}
-              onMouseLeave={(e) => { if (!isSelected({ kind: 'process', procId: proc.id })) e.currentTarget.style.background = 'transparent'; }}
-            >
-              <Chevron open={procOpen} />
-              <span style={{ flexShrink: 0 }}>{proc.emoji}</span>
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{proc.label}</span>
-              <ProgressBar ready={ready.length} total={proc.documents.length} />
-            </button>
-
-            {procOpen && (
-              <>
-                {/* Документы */}
-                <button
-                  style={rowStyle(2, { kind: 'process', procId: proc.id })}
-                  onClick={() => toggle(`${proc.id}:docs`)}
-                >
-                  <Chevron open={!!expanded[`${proc.id}:docs`]} />
-                  <span>📁</span>
-                  <span>Документы ({ready.length}/{proc.documents.length})</span>
-                </button>
-                {expanded[`${proc.id}:docs`] && proc.documents.map(docId => (
-                  <button
-                    key={docId}
-                    style={rowStyle(3, { kind: 'doc', procId: proc.id, docId })}
-                    onClick={() => setSelection({ kind: 'doc', procId: proc.id, docId })}
-                    onMouseEnter={(e) => { if (!isSelected({ kind: 'doc', procId: proc.id, docId })) e.currentTarget.style.background = '#1F1F1F'; }}
-                    onMouseLeave={(e) => { if (!isSelected({ kind: 'doc', procId: proc.id, docId })) e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    <span>{generatedTemplates.has(docId) ? '✅' : '❌'}</span>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {DOCUMENT_LABELS[docId] || docId}
-                    </span>
-                  </button>
-                ))}
-
-                {/* Системы */}
-                <button
-                  style={rowStyle(2, { kind: 'process', procId: proc.id })}
-                  onClick={() => toggle(`${proc.id}:sys`)}
-                >
-                  <Chevron open={!!expanded[`${proc.id}:sys`]} />
-                  <span>📁</span>
-                  <span>Информационные системы ({pSys.length})</span>
-                </button>
-                {expanded[`${proc.id}:sys`] && (
-                  pSys.length === 0 ? (
-                    <button
-                      style={rowStyle(3, { kind: 'process', procId: proc.id })}
-                      onClick={() => router.push('/dashboard/data-map')}
-                    >
-                      <span style={{ color: '#FF4444' }}>＋</span>
-                      <span style={{ color: '#FF4444' }}>Добавить систему</span>
-                    </button>
-                  ) : (
-                    pSys.map(s => (
-                      <button
-                        key={s.id}
-                        style={rowStyle(3, { kind: 'system', procId: proc.id, systemId: s.id })}
-                        onClick={() => setSelection({ kind: 'system', procId: proc.id, systemId: s.id })}
-                        onMouseEnter={(e) => { if (!isSelected({ kind: 'system', procId: proc.id, systemId: s.id })) e.currentTarget.style.background = '#1F1F1F'; }}
-                        onMouseLeave={(e) => { if (!isSelected({ kind: 'system', procId: proc.id, systemId: s.id })) e.currentTarget.style.background = 'transparent'; }}
-                      >
-                        <span>🖥</span>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-                      </button>
-                    ))
-                  )
-                )}
-
-                {/* Люди */}
-                <button
-                  style={rowStyle(2, { kind: 'process', procId: proc.id })}
-                  onClick={() => toggle(`${proc.id}:people`)}
-                >
-                  <Chevron open={!!expanded[`${proc.id}:people`]} />
-                  <span>📁</span>
-                  <span>Люди ({pSubj.length})</span>
-                </button>
-                {expanded[`${proc.id}:people`] && (
-                  pSubj.length === 0 ? (
-                    <button
-                      style={rowStyle(3, { kind: 'process', procId: proc.id })}
-                      onClick={() => router.push(`/dashboard/registry?tenantId=${tenantId}`)}
-                    >
-                      <span style={{ color: '#FF4444' }}>＋</span>
-                      <span style={{ color: '#FF4444' }}>Добавить людей</span>
-                    </button>
-                  ) : (
-                    pSubj.map(sub => (
-                      <button
-                        key={sub.id}
-                        style={rowStyle(3, { kind: 'subject', procId: proc.id, subjectId: sub.id })}
-                        onClick={() => setSelection({ kind: 'subject', procId: proc.id, subjectId: sub.id })}
-                        onMouseEnter={(e) => { if (!isSelected({ kind: 'subject', procId: proc.id, subjectId: sub.id })) e.currentTarget.style.background = '#1F1F1F'; }}
-                        onMouseLeave={(e) => { if (!isSelected({ kind: 'subject', procId: proc.id, subjectId: sub.id })) e.currentTarget.style.background = 'transparent'; }}
-                      >
-                        <span>👥</span>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub.full_name}</span>
-                      </button>
-                    ))
-                  )
-                )}
-              </>
-            )}
-          </div>
-        );
-      })}
-
-      {/* Регулятор */}
-      <button
-        style={rowStyle(1, { kind: 'regulator' })}
-        onClick={() => setSelection({ kind: 'regulator' })}
-        onMouseEnter={(e) => { if (!isSelected({ kind: 'regulator' })) e.currentTarget.style.background = '#1F1F1F'; }}
-        onMouseLeave={(e) => { if (!isSelected({ kind: 'regulator' })) e.currentTarget.style.background = 'transparent'; }}
-      >
-        <span style={{ flexShrink: 0 }}>🏛</span>
-        <span>РКН и регулятор</span>
-      </button>
-    </div>
-  );
-
   return (
     <div style={{
       minHeight: '100vh',
@@ -644,9 +498,9 @@ export default function DocTreePage() {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       color: '#FFFFFF',
     }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
 
-        <div style={{ marginBottom: isMobile ? '1rem' : '1.5rem' }}>
+        <div style={{ marginBottom: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem' }}>
             <span style={{ color: '#FF6B35', display: 'inline-flex' }}>
               <IconTree size={26} strokeWidth={1.8} />
@@ -656,17 +510,117 @@ export default function DocTreePage() {
             </h1>
           </div>
           <p style={{ color: '#A0A0A0', fontSize: '0.92rem', margin: 0 }}>
-            Все документы, системы и люди компании — в одном понятном дереве
+            Уровень 1 — Политика, ниже — процессы, ещё ниже — документы, системы и люди.
+            Кликните по узлу, чтобы увидеть подробности. Диаграмму можно листать вбок →
           </p>
         </div>
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '400px 1fr',
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 360px',
           gap: '1rem',
           alignItems: 'start',
         }}>
-          <div>{renderTree()}</div>
+          {/* ДИАГРАММА */}
+          <div className="cb-tree">
+            <ul>
+              <li>
+                <Node
+                  sel={{ kind: 'doc', docId: 'policy' }}
+                  onClick={() => setSelection({ kind: 'doc', docId: 'policy' })}
+                  emoji="📄"
+                  label={DOCUMENT_LABELS.policy}
+                  sub={generatedTemplates.has('policy') ? '✅ готово' : '❌ не создано'}
+                  subColor={generatedTemplates.has('policy') ? '#00C853' : '#FF4444'}
+                />
+                <ul>
+                  {PROCESSES.map(proc => {
+                    const ready = procDocsReady(proc);
+                    const pSys = procSystems(proc);
+                    const pSubj = procSubjects(proc);
+                    return (
+                      <li key={proc.id}>
+                        <Node
+                          sel={{ kind: 'process', procId: proc.id }}
+                          onClick={() => setSelection({ kind: 'process', procId: proc.id })}
+                          emoji={proc.emoji}
+                          label={proc.label}
+                          sub={`${ready.length}/${proc.documents.length} док.`}
+                          subColor={ready.length === proc.documents.length ? '#00C853' : '#FFC107'}
+                        />
+                        <ul>
+                          {proc.documents.filter(d => d !== 'policy').map(docId => (
+                            <li key={docId}>
+                              <Node
+                                sel={{ kind: 'doc', docId }}
+                                onClick={() => setSelection({ kind: 'doc', docId })}
+                                emoji={generatedTemplates.has(docId) ? '✅' : '❌'}
+                                label={DOCUMENT_LABELS[docId] || docId}
+                              />
+                            </li>
+                          ))}
+                          <li>
+                            <Node
+                              sel={{ kind: 'sysgroup', procId: proc.id }}
+                              onClick={() => setSelection({ kind: 'sysgroup', procId: proc.id })}
+                              emoji="🖥"
+                              label="Системы"
+                              sub={pSys.length > 0 ? `${pSys.length} шт.` : 'нет'}
+                              subColor={pSys.length > 0 ? '#4A90E2' : '#FF4444'}
+                              dashed={pSys.length === 0}
+                            />
+                          </li>
+                          <li>
+                            <Node
+                              sel={{ kind: 'peoplegroup', procId: proc.id }}
+                              onClick={() => setSelection({ kind: 'peoplegroup', procId: proc.id })}
+                              emoji="👥"
+                              label="Люди"
+                              sub={pSubj.length > 0 ? `${pSubj.length} чел.` : 'нет'}
+                              subColor={pSubj.length > 0 ? '#FF6B35' : '#FF4444'}
+                              dashed={pSubj.length === 0}
+                            />
+                          </li>
+                        </ul>
+                      </li>
+                    );
+                  })}
+                  <li>
+                    <Node
+                      sel={{ kind: 'regulator' }}
+                      onClick={() => setSelection({ kind: 'regulator' })}
+                      emoji="🏛"
+                      label="РКН и регулятор"
+                    />
+                    <ul>
+                      <li>
+                        <Node
+                          sel={{ kind: 'regulator' }}
+                          onClick={() => setSelection({ kind: 'regulator' })}
+                          emoji="🗺"
+                          label="Карта обработки ПДн"
+                          sub={systems.length > 0 ? '✅ данные есть' : '❌ нет ИС'}
+                          subColor={systems.length > 0 ? '#00C853' : '#FF4444'}
+                        />
+                      </li>
+                      <li>
+                        <Node
+                          sel={{ kind: 'regulator' }}
+                          onClick={() => setSelection({ kind: 'regulator' })}
+                          emoji="📨"
+                          label="Уведомление в РКН"
+                          sub="в разработке"
+                          subColor="#FFC107"
+                        />
+                      </li>
+                    </ul>
+                  </li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+
+          {/* ПАНЕЛЬ ДЕТАЛЕЙ */}
           <div>{renderDetail()}</div>
         </div>
       </div>
