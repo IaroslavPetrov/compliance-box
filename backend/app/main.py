@@ -1609,3 +1609,263 @@ try:
     print("MCP server mounted at /mcp")
 except Exception as _mcp_err:  # noqa: BLE001
     print("MCP disabled (import error):", _mcp_err)
+
+
+# ============================================================================
+# ИНДЕКС СООТВЕТСТВИЯ + ЖИЗНЕННЫЙ ЦИКЛ ДОКУМЕНТОВ + СОГЛАСИЯ
+# ============================================================================
+import urllib.request as _urlreq
+from fastapi import UploadFile as _UploadFile, File as _File
+from datetime import datetime as _dtn
+
+
+def _tenant_of(user, tenant_id, db):
+    return db.query(models.Tenant).filter(
+        models.Tenant.id == tenant_id, models.Tenant.user_id == user.id
+    ).first()
+
+
+def _fetch_page(url: str):
+    req = _urlreq.Request(url, headers={"User-Agent": "Mozilla/5.0 (ComplianceBox site-check)"})
+    with _urlreq.urlopen(req, timeout=15) as resp:
+        return resp.read(600000).decode("utf-8", "ignore")
+
+
+def _site_has_policy(website: str):
+    base = website.strip().rstrip("/")
+    if not base.startswith("http"):
+        base = "https://" + base
+    paths = ["", "/privacy-policy", "/politika", "/policy", "/privacy",
+             "/politika-obrabotki-personalnyh-dannyh"]
+    for p in paths:
+        try:
+            text = _fetch_page(base + p).lower()
+        except Exception:
+            continue
+        if "политик" in text and "персональн" in text:
+            return True
+    return False
+
+
+@app.get("/api/v1/compliance-index/")
+def compliance_index(tenant_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    tenant = _tenant_of(user, tenant_id, db)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+
+    subjects = db.query(models.PdSubject).filter(models.PdSubject.tenant_id == tenant_id).all()
+    systems = db.query(models.DataSystem).filter(
+        models.DataSystem.tenant_id == tenant_id, models.DataSystem.is_active == True).all()
+    consents = db.query(models.ConsentRecord).filter(models.ConsentRecord.tenant_id == tenant_id).all()
+    consent_by_subject = {c.subject_id: c for c in consents}
+
+    history_templates = set()
+    try:
+        hist = db.query(models.DocumentHistory).filter(
+            models.DocumentHistory.tenant_id == tenant_id).all()
+        for h in hist:
+            history_templates.add(
+                getattr(h, "template_id", None) or getattr(h, "document_type", None) or getattr(h, "template", None))
+    except Exception:
+        try:
+            hist = db.query(models.DocumentHistory).filter(
+                models.DocumentHistory.user_id == user.id).all()
+            for h in hist:
+                history_templates.add(
+                    getattr(h, "template_id", None) or getattr(h, "document_type", None) or getattr(h, "template", None))
+        except Exception:
+            pass
+
+    records = db.query(models.DocumentRecord).filter(models.DocumentRecord.tenant_id == tenant_id).all()
+    rec_by_tpl = {r.template_id: r for r in records}
+
+    def created(tpl):
+        return tpl in history_templates or tpl in rec_by_tpl
+
+    def confirmed(tpl):
+        r = rec_by_tpl.get(tpl)
+        if not r:
+            return False
+        return r.status in ("signed", "approved", "published") or bool(r.scan_data) or (tpl == "policy" and r.site_check_ok)
+
+    checks = []
+    checks.append({"id": "policy_created", "label": "Политика обработки ПДн создана", "weight": 10,
+                   "done": created("policy"), "action": "documents",
+                   "hint": "Сгенерируйте Политику в разделе «Документы»"})
+    checks.append({"id": "policy_confirmed", "label": "Политика подтверждена (сайт или скан)", "weight": 15,
+                   "done": confirmed("policy"), "action": "documents",
+                   "hint": "Нажмите «Проверить на сайте» или приложите скан утверждённой Политики"})
+    checks.append({"id": "order_created", "label": "Приказ об ответственном создан", "weight": 5,
+                   "done": created("order_responsible"), "action": "documents",
+                   "hint": "Сгенерируйте Приказ в разделе «Документы»"})
+    checks.append({"id": "order_approved", "label": "Приказ подписан (скан)", "weight": 10,
+                   "done": confirmed("order_responsible"), "action": "documents",
+                   "hint": "Приложите скан подписанного приказа"})
+    checks.append({"id": "nda_created", "label": "NDA создано", "weight": 5,
+                   "done": created("nda"), "action": "documents",
+                   "hint": "Сгенерируйте соглашение о неразглашении"})
+    checks.append({"id": "nda_signed", "label": "NDA подписано (скан)", "weight": 10,
+                   "done": confirmed("nda"), "action": "documents",
+                   "hint": "Приложите скан подписанного NDA"})
+
+    if subjects:
+        signed = sum(1 for s in subjects
+                     if consent_by_subject.get(s.id) and consent_by_subject[s.id].status == "signed")
+        ratio = signed / len(subjects)
+        missing = [s.full_name for s in subjects
+                   if not (consent_by_subject.get(s.id) and consent_by_subject[s.id].status == "signed")][:5]
+        checks.append({"id": "consents", "label": f"Согласия собраны ({signed} из {len(subjects)})",
+                       "weight": 25, "done": ratio >= 0.999, "action": "registry",
+                       "hint": "Отметьте подписанные согласия в Реестре: " + ", ".join(missing)})
+        consent_earned = 25 * ratio
+    else:
+        checks.append({"id": "consents", "label": "Согласия собраны (субъектов пока нет)",
+                       "weight": 25, "done": True, "action": "registry", "hint": ""})
+        consent_earned = 25.0
+
+    present_cats = set(s.category for s in subjects if s.category)
+    covered = set()
+    for sysm in systems:
+        try:
+            cats = json.loads(sysm.categories) if sysm.categories else []
+        except Exception:
+            cats = []
+        covered.update(cats)
+    cov_ratio = (len(present_cats & covered) / len(present_cats)) if present_cats else (1.0 if systems else 0.0)
+    checks.append({"id": "systems", "label": "Системы заведены для всех категорий", "weight": 10,
+                   "done": cov_ratio >= 0.999, "action": "data-map",
+                   "hint": "Добавьте ИС в Карте обработки для категорий без систем"})
+    checks.append({"id": "map", "label": "Карта обработки готова для РКН", "weight": 10,
+                   "done": len(systems) > 0, "action": "data-map",
+                   "hint": "Добавьте хотя бы одну информационную систему"})
+
+    score = 0.0
+    for c in checks:
+        if c["id"] == "consents" and subjects:
+            score += consent_earned
+            c["earned"] = round(consent_earned, 1)
+        elif c["id"] == "systems":
+            earned = c["weight"] * cov_ratio
+            score += earned
+            c["earned"] = round(earned, 1)
+        else:
+            earned = c["weight"] if c["done"] else 0.0
+            score += earned
+            c["earned"] = earned
+    return {"score": round(score), "checks": checks}
+
+
+@app.get("/api/v1/document-records/")
+def list_document_records(tenant_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    if not _tenant_of(user, tenant_id, db):
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    rows = db.query(models.DocumentRecord).filter(models.DocumentRecord.tenant_id == tenant_id).all()
+    return [{"id": r.id, "template_id": r.template_id, "status": r.status, "scan_name": r.scan_name,
+             "has_scan": bool(r.scan_data), "site_check_ok": r.site_check_ok,
+             "site_checked_at": r.site_checked_at.isoformat() if r.site_checked_at else None} for r in rows]
+
+
+@app.post("/api/v1/document-records/")
+def upsert_document_record(payload: dict, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    tenant_id = int(payload.get("tenant_id"))
+    template_id = str(payload.get("template_id"))
+    status = str(payload.get("status") or "generated")
+    if not _tenant_of(user, tenant_id, db):
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    rec = db.query(models.DocumentRecord).filter(
+        models.DocumentRecord.tenant_id == tenant_id,
+        models.DocumentRecord.template_id == template_id).first()
+    if not rec:
+        rec = models.DocumentRecord(tenant_id=tenant_id, template_id=template_id, status=status)
+        db.add(rec)
+    else:
+        rec.status = status
+    db.commit()
+    db.refresh(rec)
+    return {"id": rec.id, "template_id": rec.template_id, "status": rec.status}
+
+
+@app.post("/api/v1/document-records/{record_id}/scan")
+async def upload_document_scan(record_id: int, file: _UploadFile = _File(...),
+                               db: Session = Depends(get_db), user=Depends(get_current_user)):
+    rec = db.query(models.DocumentRecord).filter(models.DocumentRecord.id == record_id).first()
+    if not rec or not _tenant_of(user, rec.tenant_id, db):
+        raise HTTPException(status_code=404, detail="Запись не найдена")
+    data = await file.read()
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Файл больше 8 МБ")
+    rec.scan_name = file.filename
+    rec.scan_data = data
+    if rec.status == "generated":
+        rec.status = "signed"
+    db.commit()
+    return {"id": rec.id, "scan_name": rec.scan_name, "status": rec.status}
+
+
+@app.post("/api/v1/document-records/{record_id}/check-site")
+def check_policy_on_site(record_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    rec = db.query(models.DocumentRecord).filter(models.DocumentRecord.id == record_id).first()
+    if not rec or not _tenant_of(user, rec.tenant_id, db):
+        raise HTTPException(status_code=404, detail="Запись не найдена")
+    tenant = db.query(models.Tenant).filter(models.Tenant.id == rec.tenant_id).first()
+    ok = False
+    if tenant and tenant.website:
+        try:
+            ok = _site_has_policy(tenant.website)
+        except Exception:
+            ok = False
+    rec.site_checked_at = _dtn.utcnow()
+    rec.site_check_ok = ok
+    if ok:
+        rec.status = "published"
+    db.commit()
+    return {"ok": ok, "status": rec.status}
+
+
+@app.get("/api/v1/consent-records/")
+def list_consent_records(tenant_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    if not _tenant_of(user, tenant_id, db):
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    rows = db.query(models.ConsentRecord).filter(models.ConsentRecord.tenant_id == tenant_id).all()
+    return [{"id": r.id, "subject_id": r.subject_id, "status": r.status, "scan_name": r.scan_name,
+             "has_scan": bool(r.scan_data), "signed_at": r.signed_at.isoformat() if r.signed_at else None} for r in rows]
+
+
+@app.post("/api/v1/consent-records/")
+def upsert_consent_record(payload: dict, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    tenant_id = int(payload.get("tenant_id"))
+    subject_id = int(payload.get("subject_id"))
+    status = str(payload.get("status") or "signed")
+    if not _tenant_of(user, tenant_id, db):
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    rec = db.query(models.ConsentRecord).filter(
+        models.ConsentRecord.tenant_id == tenant_id,
+        models.ConsentRecord.subject_id == subject_id).first()
+    if not rec:
+        rec = models.ConsentRecord(tenant_id=tenant_id, subject_id=subject_id, status=status)
+        db.add(rec)
+    else:
+        rec.status = status
+    if status == "signed" and not rec.signed_at:
+        rec.signed_at = _dtn.utcnow()
+    db.commit()
+    db.refresh(rec)
+    return {"id": rec.id, "subject_id": rec.subject_id, "status": rec.status}
+
+
+@app.post("/api/v1/consent-records/{record_id}/scan")
+async def upload_consent_scan(record_id: int, file: _UploadFile = _File(...),
+                              db: Session = Depends(get_db), user=Depends(get_current_user)):
+    rec = db.query(models.ConsentRecord).filter(models.ConsentRecord.id == record_id).first()
+    if not rec or not _tenant_of(user, rec.tenant_id, db):
+        raise HTTPException(status_code=404, detail="Запись не найдена")
+    data = await file.read()
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Файл больше 8 МБ")
+    rec.scan_name = file.filename
+    rec.scan_data = data
+    rec.status = "signed"
+    if not rec.signed_at:
+        rec.signed_at = _dtn.utcnow()
+    db.commit()
+    return {"id": rec.id, "scan_name": rec.scan_name, "status": rec.status}

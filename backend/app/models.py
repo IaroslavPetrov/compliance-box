@@ -166,3 +166,40 @@ class ApiToken(Base):
     revoked_at = Column(DateTime, nullable=True)
 
     user = relationship("User")
+
+
+# ============================================================================
+# ЖИЗНЕННЫЙ ЦИКЛ ДОКУМЕНТОВ И ПОДПИСАННЫЕ СОГЛАСИЯ (индекс соответствия)
+# ============================================================================
+from sqlalchemy import LargeBinary as _LargeBinary
+from datetime import datetime as _dt_models
+
+
+class DocumentRecord(Base):
+    """Жизненный цикл документа компании: generated -> signed/approved -> published."""
+    __tablename__ = "document_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
+    template_id = Column(String, nullable=False)
+    status = Column(String, default="generated")  # generated | signed | approved | published
+    scan_name = Column(String, nullable=True)
+    scan_data = Column(_LargeBinary, nullable=True)
+    site_checked_at = Column(DateTime, nullable=True)
+    site_check_ok = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=_dt_models.utcnow)
+    updated_at = Column(DateTime, default=_dt_models.utcnow, onupdate=_dt_models.utcnow)
+
+
+class ConsentRecord(Base):
+    """Факт подписания согласия субъектом (или приложенный скан)."""
+    __tablename__ = "consent_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("pd_subjects.id"), nullable=False)
+    status = Column(String, default="missing")  # missing | signed
+    scan_name = Column(String, nullable=True)
+    scan_data = Column(_LargeBinary, nullable=True)
+    signed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_dt_models.utcnow)
