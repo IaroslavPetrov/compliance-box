@@ -130,33 +130,53 @@ export default function DocTreePage() {
   useEffect(() => {
     if (!tenantId) return;
     let cancelled = false;
-    setLoading(true);
-    setLoadError(false);
     const token = localStorage.getItem('token');
     if (!token) {
       router.push('/login');
       return;
     }
 
-    Promise.all([
-      fetch(`${API}/pd-subjects/?tenant_id=${tenantId}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
-      fetch(`${API}/data-systems/?tenant_id=${tenantId}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => (r.ok ? r.json() : [])),
-      fetch(`${API}/documents/history?tenant_id=${tenantId}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => (r.ok ? r.json() : [])),
-    ])
-      .then(([s, sys, d]) => {
-        if (cancelled) return;
-        setSubjects(Array.isArray(s) ? s : []);
-        setSystems(Array.isArray(sys) ? sys : []);
-        setDocs(Array.isArray(d) ? d : []);
-      })
-      .catch(err => {
-        if (cancelled) return;
-        setLoadError(true);
-        toastRef.current.error('Не удалось загрузить данные: ' + err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    const loadOnce = () =>
+      Promise.all([
+        fetch(`${API}/pd-subjects/?tenant_id=${tenantId}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        }).then(r => r.json()),
+        fetch(`${API}/data-systems/?tenant_id=${tenantId}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        }).then(r => (r.ok ? r.json() : [])),
+        fetch(`${API}/documents/history/?tenant_id=${tenantId}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        }).then(r => (r.ok ? r.json() : [])),
+      ]);
+
+    // Тихие автоповторы: пользователь не видит технических деталей
+    const attempt = (left: number) => {
+      loadOnce()
+        .then(([s, sys, d]) => {
+          if (cancelled) return;
+          setSubjects(Array.isArray(s) ? s : []);
+          setSystems(Array.isArray(sys) ? sys : []);
+          setDocs(Array.isArray(d) ? d : []);
+          setLoadError(false);
+          setLoading(false);
+        })
+        .catch(err => {
+          if (cancelled) return;
+          if (left > 0) {
+            window.setTimeout(() => {
+              if (!cancelled) attempt(left - 1);
+            }, 1500);
+          } else {
+            console.error('doc-tree load error:', err);
+            setLoading(false);
+            setLoadError(true);
+          }
+        });
+    };
+
+    setLoading(true);
+    setLoadError(false);
+    attempt(2);
 
     return () => {
       cancelled = true;
@@ -272,7 +292,7 @@ export default function DocTreePage() {
           <IconAlert size={36} strokeWidth={1.5} />
         </span>
         <p style={{ fontSize: '1.05rem', margin: 0, maxWidth: '480px', lineHeight: 1.5 }}>
-          Не удалось загрузить данные компании. Сервер мог «уснуть» или сеть недоступна (проверь VPN).
+          Не удалось загрузить данные компании. Пожалуйста, повторите попытку.
         </p>
         <button
           onClick={() => setRetry(r => r + 1)}
