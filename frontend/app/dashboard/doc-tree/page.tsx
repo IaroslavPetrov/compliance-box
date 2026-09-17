@@ -53,7 +53,7 @@ type Selection =
 const PROCESSES: ProcessNode[] = [
   {
     id: 'hr',
-    label: 'HR-процесс',
+    label: 'HR-процесс (сотрудники)',
     emoji: '👔',
     categories: ['Сотрудник'],
     documents: ['policy', 'consent', 'nda', 'order_responsible'],
@@ -61,7 +61,7 @@ const PROCESSES: ProcessNode[] = [
   },
   {
     id: 'sales',
-    label: 'Продажи и услуги',
+    label: 'Продажи и услуги (клиенты)',
     emoji: '🛒',
     categories: ['Клиент'],
     documents: ['policy', 'consent', 'nda'],
@@ -69,7 +69,7 @@ const PROCESSES: ProcessNode[] = [
   },
   {
     id: 'candidates',
-    label: 'Подбор персонала',
+    label: 'Подбор персонала (кандидаты)',
     emoji: '🧑‍💼',
     categories: ['Кандидат'],
     documents: ['policy', 'consent'],
@@ -77,7 +77,7 @@ const PROCESSES: ProcessNode[] = [
   },
   {
     id: 'website',
-    label: 'Сайт и маркетинг',
+    label: 'Сайт и маркетинг (посетители)',
     emoji: '🌐',
     categories: ['Посетитель сайта'],
     documents: ['policy'],
@@ -131,9 +131,15 @@ export default function DocTreePage() {
   const [loadError, setLoadError] = useState(false);
   const [retry, setRetry] = useState(0);
   const [selection, setSelection] = useState<Selection>({ kind: 'doc', docId: 'policy' });
+  const [sheetHidden, setSheetHidden] = useState(false);
 
   const toastRef = useRef(toast);
   toastRef.current = toast;
+
+  const select = (sel: Selection) => {
+    setSelection(sel);
+    setSheetHidden(false);
+  };
 
   useEffect(() => {
     if (!tenantId && currentTenant) {
@@ -209,10 +215,9 @@ export default function DocTreePage() {
 
   const isSelected = (sel: Selection) => JSON.stringify(sel) === JSON.stringify(selection);
 
-  // Узел диаграммы
-  const Node = ({ sel, onClick, emoji, label, sub, subColor, dashed }: {
+  // Узел-карточка
+  const Node = ({ sel, emoji, label, sub, subColor, dashed }: {
     sel: Selection;
-    onClick: () => void;
     emoji: string;
     label: string;
     sub?: string;
@@ -222,15 +227,15 @@ export default function DocTreePage() {
     const active = isSelected(sel);
     return (
       <button
-        onClick={onClick}
+        onClick={() => select(sel)}
         style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           gap: '2px',
-          minWidth: '128px',
-          maxWidth: '170px',
-          padding: '0.55rem 0.7rem',
+          minWidth: '118px',
+          maxWidth: '160px',
+          padding: '0.5rem 0.65rem',
           background: active ? 'rgba(255, 107, 53, 0.12)' : '#1A1A1A',
           border: dashed ? '1px dashed #FF4444' : `1px solid ${active ? '#FF6B35' : '#2A2A2A'}`,
           borderRadius: '10px',
@@ -243,7 +248,7 @@ export default function DocTreePage() {
           transition: 'border-color 0.15s, background 0.15s',
         }}
       >
-        <span style={{ fontSize: '1.05rem' }}>{emoji}</span>
+        <span style={{ fontSize: '1rem' }}>{emoji}</span>
         <span>{label}</span>
         {sub && (
           <span style={{ fontSize: '0.68rem', fontWeight: 700, color: subColor || '#666' }}>{sub}</span>
@@ -252,16 +257,23 @@ export default function DocTreePage() {
     );
   };
 
+  // Короткий горизонтальный «отвод» от вертикальной рейки к узлу
+  const Stub = ({ color = '#2A2A2A', width = 14 }: { color?: string; width?: number }) => (
+    <div style={{ width: `${width}px`, height: '2px', background: color, flexShrink: 0, marginLeft: `-${width}px` }} />
+  );
+
   // ------------------------------------------------------------------
-  // ПРАВАЯ ПАНЕЛЬ
+  // ПАНЕЛЬ ДЕТАЛЕЙ
   // ------------------------------------------------------------------
   const renderDetail = () => {
-    const card: React.CSSProperties = {
-      background: '#1A1A1A',
-      border: '1px solid #2A2A2A',
-      borderRadius: '12px',
-      padding: '1.25rem',
-    };
+    const card: React.CSSProperties = isMobile
+      ? {}
+      : {
+          background: '#1A1A1A',
+          border: '1px solid #2A2A2A',
+          borderRadius: '12px',
+          padding: '1.25rem',
+        };
     const btnPrimary: React.CSSProperties = {
       padding: '0.6rem 1.1rem',
       background: '#FF6B35',
@@ -273,7 +285,7 @@ export default function DocTreePage() {
       cursor: 'pointer',
     };
     const Label = ({ children }: { children: React.ReactNode }) => (
-      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '0.9rem', marginBottom: '0.25rem' }}>
+      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: isMobile ? '#888' : '#666', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '0.9rem', marginBottom: '0.25rem' }}>
         {children}
       </div>
     );
@@ -282,7 +294,7 @@ export default function DocTreePage() {
       const ready = generatedTemplates.has(selection.docId);
       return (
         <div style={card}>
-          <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>
+          <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>
             {ready ? '✅' : '❌'} {DOCUMENT_LABELS[selection.docId] || selection.docId}
           </div>
           <p style={{ fontSize: '0.9rem', color: '#A0A0A0', lineHeight: 1.55, marginTop: '0.5rem' }}>
@@ -309,7 +321,7 @@ export default function DocTreePage() {
       const pSubj = procSubjects(proc);
       return (
         <div style={card}>
-          <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>{proc.emoji} {proc.label}</div>
+          <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{proc.emoji} {proc.label}</div>
           <p style={{ fontSize: '0.9rem', color: '#A0A0A0', lineHeight: 1.5 }}>{proc.description}</p>
           <Label>Готовность документов</Label>
           <div style={{ fontSize: '0.92rem', color: '#D0D0D0', fontWeight: 600 }}>
@@ -340,9 +352,9 @@ export default function DocTreePage() {
       const pSys = proc ? procSystems(proc) : [];
       return (
         <div style={card}>
-          <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>🖥 Информационные системы</div>
+          <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>🖥 Информационные системы</div>
           <p style={{ fontSize: '0.88rem', color: '#A0A0A0' }}>
-            Системы процесса «{proc?.label}», в которых обрабатываются данные категорий: {proc?.categories.join(', ')}
+            Системы процесса «{proc?.label}»: категории {proc?.categories.join(', ')}
           </p>
           {pSys.length === 0 ? (
             <>
@@ -363,7 +375,7 @@ export default function DocTreePage() {
                 {pSys.map(s => (
                   <div key={s.id} style={{ border: '1px solid #2A2A2A', borderRadius: '8px', padding: '0.6rem 0.8rem' }}>
                     <div style={{ fontSize: '0.92rem', fontWeight: 600, color: '#D0D0D0' }}>{s.name}</div>
-                    <div style={{ fontSize: '0.78rem', color: '#666', marginTop: '2px' }}>
+                    <div style={{ fontSize: '0.78rem', color: '#888', marginTop: '2px' }}>
                       {SYSTEM_TYPE_LABELS[s.system_type] || s.system_type}
                       {s.data_location ? ` · ${s.data_location}` : ''}
                     </div>
@@ -386,7 +398,7 @@ export default function DocTreePage() {
       const pSubj = proc ? procSubjects(proc) : [];
       return (
         <div style={card}>
-          <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>👥 Люди процесса</div>
+          <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>👥 Люди процесса</div>
           <p style={{ fontSize: '0.88rem', color: '#A0A0A0' }}>
             Субъекты ПДн процесса «{proc?.label}» ({pSubj.length})
           </p>
@@ -405,7 +417,7 @@ export default function DocTreePage() {
           ) : (
             <>
               <Label>Список</Label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '320px', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '280px', overflowY: 'auto' }}>
                 {pSubj.map(s => (
                   <div key={s.id} style={{ border: '1px solid #2A2A2A', borderRadius: '8px', padding: '0.5rem 0.8rem', display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
                     <span style={{ fontSize: '0.88rem', color: '#D0D0D0' }}>{s.full_name}</span>
@@ -428,7 +440,7 @@ export default function DocTreePage() {
     const hasMap = systems.length > 0;
     return (
       <div style={card}>
-        <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>🏛 РКН и регулятор</div>
+        <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>🏛 РКН и регулятор</div>
         <Label>Карта обработки ПДн</Label>
         <div style={{ fontSize: '0.92rem', color: hasMap ? '#00C853' : '#FF4444', fontWeight: 600 }}>
           {hasMap ? 'Есть данные для карты — можно выгрузить PDF' : 'Сначала добавьте информационные системы'}
@@ -488,19 +500,150 @@ export default function DocTreePage() {
   }
 
   // ------------------------------------------------------------------
-  // ДИАГРАММА
+  // ВЕРТИКАЛЬНАЯ СХЕМА
   // ------------------------------------------------------------------
+  const renderSection = (key: string, node: React.ReactNode, children: React.ReactNode) => (
+    <div key={key}>
+      <div style={{ display: 'flex', alignItems: 'center', marginLeft: '-14px' }}>
+        <Stub color="#3A3A3A" width={14} />
+        {node}
+      </div>
+      <div style={{
+        marginLeft: '12px',
+        borderLeft: '2px solid #2A2A2A',
+        paddingLeft: '14px',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '10px',
+        paddingTop: '10px',
+        paddingBottom: '4px',
+        marginTop: '6px',
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+
+  const renderDiagram = () => (
+    <div>
+      {/* Уровень 1: Политика */}
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <Node
+          sel={{ kind: 'doc', docId: 'policy' }}
+          emoji="📄"
+          label={DOCUMENT_LABELS.policy}
+          sub={generatedTemplates.has('policy') ? '✅ готово' : '❌ не создано'}
+          subColor={generatedTemplates.has('policy') ? '#00C853' : '#FF4444'}
+        />
+      </div>
+      <div style={{ width: '2px', height: '22px', background: '#3A3A3A', margin: '0 auto' }} />
+
+      {/* Рейка процессов */}
+      <div style={{
+        borderLeft: '2px solid #3A3A3A',
+        marginLeft: '10px',
+        paddingLeft: '14px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '18px',
+        paddingBottom: '6px',
+      }}>
+        {PROCESSES.map(proc => {
+          const ready = procDocsReady(proc);
+          const pSys = procSystems(proc);
+          const pSubj = procSubjects(proc);
+          return renderSection(
+            proc.id,
+            <Node
+              sel={{ kind: 'process', procId: proc.id }}
+              emoji={proc.emoji}
+              label={proc.label}
+              sub={`${ready.length}/${proc.documents.length} док.`}
+              subColor={ready.length === proc.documents.length ? '#00C853' : '#FFC107'}
+            />,
+            <>
+              {proc.documents.filter(d => d !== 'policy').map(docId => (
+                <div key={docId} style={{ display: 'flex', alignItems: 'center' }}>
+                  <Stub width={12} />
+                  <Node
+                    sel={{ kind: 'doc', docId }}
+                    emoji={generatedTemplates.has(docId) ? '✅' : '❌'}
+                    label={DOCUMENT_LABELS[docId] || docId}
+                  />
+                </div>
+              ))}
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <Stub width={12} />
+                <Node
+                  sel={{ kind: 'sysgroup', procId: proc.id }}
+                  emoji="🖥"
+                  label="Системы"
+                  sub={pSys.length > 0 ? `${pSys.length} шт.` : 'нет'}
+                  subColor={pSys.length > 0 ? '#4A90E2' : '#FF4444'}
+                  dashed={pSys.length === 0}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <Stub width={12} />
+                <Node
+                  sel={{ kind: 'peoplegroup', procId: proc.id }}
+                  emoji="👥"
+                  label="Люди"
+                  sub={pSubj.length > 0 ? `${pSubj.length} чел.` : 'нет'}
+                  subColor={pSubj.length > 0 ? '#FF6B35' : '#FF4444'}
+                  dashed={pSubj.length === 0}
+                />
+              </div>
+            </>
+          );
+        })}
+
+        {renderSection(
+          'regulator',
+          <Node
+            sel={{ kind: 'regulator' }}
+            emoji="🏛"
+            label="РКН и регулятор"
+          />,
+          <>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <Stub width={12} />
+              <Node
+                sel={{ kind: 'regulator' }}
+                emoji="🗺"
+                label="Карта обработки ПДн"
+                sub={systems.length > 0 ? '✅ данные есть' : '❌ нет ИС'}
+                subColor={systems.length > 0 ? '#00C853' : '#FF4444'}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <Stub width={12} />
+              <Node
+                sel={{ kind: 'regulator' }}
+                emoji="📨"
+                label="Уведомление в РКН"
+                sub="в разработке"
+                subColor="#FFC107"
+              />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div style={{
       minHeight: '100vh',
       background: '#0A0A0A',
       padding: isMobile ? '1rem' : '2rem',
+      paddingBottom: isMobile ? '5rem' : '2rem',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       color: '#FFFFFF',
     }}>
-      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
-        <div style={{ marginBottom: '1rem' }}>
+        <div style={{ marginBottom: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem' }}>
             <span style={{ color: '#FF6B35', display: 'inline-flex' }}>
               <IconTree size={26} strokeWidth={1.8} />
@@ -509,9 +652,9 @@ export default function DocTreePage() {
               Дерево процессов
             </h1>
           </div>
-          <p style={{ color: '#A0A0A0', fontSize: '0.92rem', margin: 0 }}>
-            Уровень 1 — Политика, ниже — процессы, ещё ниже — документы, системы и люди.
-            Кликните по узлу, чтобы увидеть подробности. Диаграмму можно листать вбок →
+          <p style={{ color: '#A0A0A0', fontSize: '0.92rem', margin: 0, lineHeight: 1.5 }}>
+            Читайте сверху вниз: Политика → процессы → документы, системы и люди.
+            Кликните по узлу — подробности откроются {isMobile ? 'в панели внизу экрана' : 'справа'}.
           </p>
         </div>
 
@@ -521,109 +664,48 @@ export default function DocTreePage() {
           gap: '1rem',
           alignItems: 'start',
         }}>
-          {/* ДИАГРАММА */}
-          <div className="cb-tree">
-            <ul>
-              <li>
-                <Node
-                  sel={{ kind: 'doc', docId: 'policy' }}
-                  onClick={() => setSelection({ kind: 'doc', docId: 'policy' })}
-                  emoji="📄"
-                  label={DOCUMENT_LABELS.policy}
-                  sub={generatedTemplates.has('policy') ? '✅ готово' : '❌ не создано'}
-                  subColor={generatedTemplates.has('policy') ? '#00C853' : '#FF4444'}
-                />
-                <ul>
-                  {PROCESSES.map(proc => {
-                    const ready = procDocsReady(proc);
-                    const pSys = procSystems(proc);
-                    const pSubj = procSubjects(proc);
-                    return (
-                      <li key={proc.id}>
-                        <Node
-                          sel={{ kind: 'process', procId: proc.id }}
-                          onClick={() => setSelection({ kind: 'process', procId: proc.id })}
-                          emoji={proc.emoji}
-                          label={proc.label}
-                          sub={`${ready.length}/${proc.documents.length} док.`}
-                          subColor={ready.length === proc.documents.length ? '#00C853' : '#FFC107'}
-                        />
-                        <ul>
-                          {proc.documents.filter(d => d !== 'policy').map(docId => (
-                            <li key={docId}>
-                              <Node
-                                sel={{ kind: 'doc', docId }}
-                                onClick={() => setSelection({ kind: 'doc', docId })}
-                                emoji={generatedTemplates.has(docId) ? '✅' : '❌'}
-                                label={DOCUMENT_LABELS[docId] || docId}
-                              />
-                            </li>
-                          ))}
-                          <li>
-                            <Node
-                              sel={{ kind: 'sysgroup', procId: proc.id }}
-                              onClick={() => setSelection({ kind: 'sysgroup', procId: proc.id })}
-                              emoji="🖥"
-                              label="Системы"
-                              sub={pSys.length > 0 ? `${pSys.length} шт.` : 'нет'}
-                              subColor={pSys.length > 0 ? '#4A90E2' : '#FF4444'}
-                              dashed={pSys.length === 0}
-                            />
-                          </li>
-                          <li>
-                            <Node
-                              sel={{ kind: 'peoplegroup', procId: proc.id }}
-                              onClick={() => setSelection({ kind: 'peoplegroup', procId: proc.id })}
-                              emoji="👥"
-                              label="Люди"
-                              sub={pSubj.length > 0 ? `${pSubj.length} чел.` : 'нет'}
-                              subColor={pSubj.length > 0 ? '#FF6B35' : '#FF4444'}
-                              dashed={pSubj.length === 0}
-                            />
-                          </li>
-                        </ul>
-                      </li>
-                    );
-                  })}
-                  <li>
-                    <Node
-                      sel={{ kind: 'regulator' }}
-                      onClick={() => setSelection({ kind: 'regulator' })}
-                      emoji="🏛"
-                      label="РКН и регулятор"
-                    />
-                    <ul>
-                      <li>
-                        <Node
-                          sel={{ kind: 'regulator' }}
-                          onClick={() => setSelection({ kind: 'regulator' })}
-                          emoji="🗺"
-                          label="Карта обработки ПДн"
-                          sub={systems.length > 0 ? '✅ данные есть' : '❌ нет ИС'}
-                          subColor={systems.length > 0 ? '#00C853' : '#FF4444'}
-                        />
-                      </li>
-                      <li>
-                        <Node
-                          sel={{ kind: 'regulator' }}
-                          onClick={() => setSelection({ kind: 'regulator' })}
-                          emoji="📨"
-                          label="Уведомление в РКН"
-                          sub="в разработке"
-                          subColor="#FFC107"
-                        />
-                      </li>
-                    </ul>
-                  </li>
-                </ul>
-              </li>
-            </ul>
-          </div>
-
-          {/* ПАНЕЛЬ ДЕТАЛЕЙ */}
-          <div>{renderDetail()}</div>
+          <div>{renderDiagram()}</div>
+          {!isMobile && <div>{renderDetail()}</div>}
         </div>
       </div>
+
+      {/* Мобильная нижняя панель деталей */}
+      {isMobile && !sheetHidden && (
+        <div style={{
+          position: 'fixed',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 1200,
+          background: '#141414',
+          borderTop: '2px solid #FF6B35',
+          borderRadius: '16px 16px 0 0',
+          padding: '0.9rem 1rem 1.4rem',
+          maxHeight: '62vh',
+          overflowY: 'auto',
+          boxShadow: '0 -8px 30px rgba(0,0,0,0.55)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <div style={{ width: '40px', height: '4px', background: '#3A3A3A', borderRadius: '2px', margin: '0 auto' }} />
+            <button
+              onClick={() => setSheetHidden(true)}
+              style={{
+                position: 'absolute',
+                top: '0.7rem',
+                right: '0.9rem',
+                background: 'transparent',
+                border: 'none',
+                color: '#A0A0A0',
+                fontSize: '1.1rem',
+                cursor: 'pointer',
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          {renderDetail()}
+        </div>
+      )}
     </div>
   );
 }
