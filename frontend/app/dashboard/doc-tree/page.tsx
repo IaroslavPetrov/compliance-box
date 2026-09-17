@@ -233,9 +233,9 @@ export default function DocTreePage() {
           flexDirection: 'column',
           alignItems: 'center',
           gap: '2px',
-          minWidth: '118px',
-          maxWidth: '160px',
-          padding: '0.5rem 0.65rem',
+          minWidth: '128px',
+          maxWidth: '190px',
+          padding: '0.5rem 0.7rem',
           background: active ? 'rgba(255, 107, 53, 0.12)' : '#1A1A1A',
           border: dashed ? '1px dashed #FF4444' : `1px solid ${active ? '#FF6B35' : '#2A2A2A'}`,
           borderRadius: '10px',
@@ -257,9 +257,14 @@ export default function DocTreePage() {
     );
   };
 
-  // Короткий горизонтальный «отвод» от вертикальной рейки к узлу
-  const Stub = ({ color = '#2A2A2A', width = 14 }: { color?: string; width?: number }) => (
-    <div style={{ width: `${width}px`, height: '2px', background: color, flexShrink: 0, marginLeft: `-${width}px` }} />
+  // Горизонтальный отвод от рейки к узлу (всегда «в плюс», без отрицательных margin)
+  const Stub = ({ color, width }: { color: string; width: number }) => (
+    <div style={{ width: `${width}px`, height: '2px', background: color, flexShrink: 0 }} />
+  );
+
+  // Вертикальный отрезок линии
+  const VLine = ({ color, height, marginLeft }: { color: string; height: number; marginLeft: number }) => (
+    <div style={{ width: '2px', height: `${height}px`, background: color, marginLeft: `${marginLeft}px` }} />
   );
 
   // ------------------------------------------------------------------
@@ -500,34 +505,86 @@ export default function DocTreePage() {
   }
 
   // ------------------------------------------------------------------
-  // ВЕРТИКАЛЬНАЯ СХЕМА
+  // ВЕРТИКАЛЬНАЯ СХЕМА (непрерывные линии)
   // ------------------------------------------------------------------
-  const renderSection = (key: string, node: React.ReactNode, children: React.ReactNode) => (
-    <div key={key}>
-      <div style={{ display: 'flex', alignItems: 'center', marginLeft: '-14px' }}>
-        <Stub color="#3A3A3A" width={14} />
-        {node}
-      </div>
-      <div style={{
-        marginLeft: '12px',
-        borderLeft: '2px solid #2A2A2A',
-        paddingLeft: '14px',
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: '10px',
-        paddingTop: '10px',
-        paddingBottom: '4px',
-        marginTop: '6px',
-      }}>
-        {children}
-      </div>
+  const renderChildRow = (key: string, node: React.ReactNode) => (
+    <div key={key} style={{ display: 'flex', alignItems: 'center' }}>
+      <Stub color="#2A2A2A" width={12} />
+      {node}
     </div>
   );
 
+  const renderProcessBlock = (proc: ProcessNode) => {
+    const ready = procDocsReady(proc);
+    const pSys = procSystems(proc);
+    const pSubj = procSubjects(proc);
+    return (
+      <div key={proc.id}>
+        {/* узел процесса на главной рейке */}
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <Stub color="#3A3A3A" width={14} />
+          <Node
+            sel={{ kind: 'process', procId: proc.id }}
+            emoji={proc.emoji}
+            label={proc.label}
+            sub={`${ready.length}/${proc.documents.length} док.`}
+            subColor={ready.length === proc.documents.length ? '#00C853' : '#FFC107'}
+          />
+        </div>
+        {/* спуск к дочерней рейке */}
+        <VLine color="#2A2A2A" height={10} marginLeft={24} />
+        {/* дочерняя рейка: документы, системы, люди — столбиком */}
+        <div style={{
+          marginLeft: '24px',
+          borderLeft: '2px solid #2A2A2A',
+          borderRadius: '0 0 0 10px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          paddingTop: '6px',
+          paddingBottom: '10px',
+        }}>
+          {proc.documents.filter(d => d !== 'policy').map(docId =>
+            renderChildRow(
+              docId,
+              <Node
+                sel={{ kind: 'doc', docId }}
+                emoji={generatedTemplates.has(docId) ? '✅' : '❌'}
+                label={DOCUMENT_LABELS[docId] || docId}
+              />
+            )
+          )}
+          {renderChildRow(
+            'sys',
+            <Node
+              sel={{ kind: 'sysgroup', procId: proc.id }}
+              emoji="🖥"
+              label="Системы"
+              sub={pSys.length > 0 ? `${pSys.length} шт.` : 'нет'}
+              subColor={pSys.length > 0 ? '#4A90E2' : '#FF4444'}
+              dashed={pSys.length === 0}
+            />
+          )}
+          {renderChildRow(
+            'people',
+            <Node
+              sel={{ kind: 'peoplegroup', procId: proc.id }}
+              emoji="👥"
+              label="Люди"
+              sub={pSubj.length > 0 ? `${pSubj.length} чел.` : 'нет'}
+              subColor={pSubj.length > 0 ? '#FF6B35' : '#FF4444'}
+              dashed={pSubj.length === 0}
+            />
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderDiagram = () => (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* Уровень 1: Политика */}
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
+      <div>
         <Node
           sel={{ kind: 'doc', docId: 'policy' }}
           emoji="📄"
@@ -536,78 +593,45 @@ export default function DocTreePage() {
           subColor={generatedTemplates.has('policy') ? '#00C853' : '#FF4444'}
         />
       </div>
-      <div style={{ width: '2px', height: '22px', background: '#3A3A3A', margin: '0 auto' }} />
+      {/* непрерывный спуск к главной рейке */}
+      <VLine color="#3A3A3A" height={16} marginLeft={10} />
 
-      {/* Рейка процессов */}
+      {/* Главная рейка процессов */}
       <div style={{
-        borderLeft: '2px solid #3A3A3A',
         marginLeft: '10px',
-        paddingLeft: '14px',
+        borderLeft: '2px solid #3A3A3A',
+        borderRadius: '0 0 0 12px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '18px',
-        paddingBottom: '6px',
+        gap: '16px',
+        paddingTop: '8px',
+        paddingBottom: '12px',
       }}>
-        {PROCESSES.map(proc => {
-          const ready = procDocsReady(proc);
-          const pSys = procSystems(proc);
-          const pSubj = procSubjects(proc);
-          return renderSection(
-            proc.id,
-            <Node
-              sel={{ kind: 'process', procId: proc.id }}
-              emoji={proc.emoji}
-              label={proc.label}
-              sub={`${ready.length}/${proc.documents.length} док.`}
-              subColor={ready.length === proc.documents.length ? '#00C853' : '#FFC107'}
-            />,
-            <>
-              {proc.documents.filter(d => d !== 'policy').map(docId => (
-                <div key={docId} style={{ display: 'flex', alignItems: 'center' }}>
-                  <Stub width={12} />
-                  <Node
-                    sel={{ kind: 'doc', docId }}
-                    emoji={generatedTemplates.has(docId) ? '✅' : '❌'}
-                    label={DOCUMENT_LABELS[docId] || docId}
-                  />
-                </div>
-              ))}
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <Stub width={12} />
-                <Node
-                  sel={{ kind: 'sysgroup', procId: proc.id }}
-                  emoji="🖥"
-                  label="Системы"
-                  sub={pSys.length > 0 ? `${pSys.length} шт.` : 'нет'}
-                  subColor={pSys.length > 0 ? '#4A90E2' : '#FF4444'}
-                  dashed={pSys.length === 0}
-                />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <Stub width={12} />
-                <Node
-                  sel={{ kind: 'peoplegroup', procId: proc.id }}
-                  emoji="👥"
-                  label="Люди"
-                  sub={pSubj.length > 0 ? `${pSubj.length} чел.` : 'нет'}
-                  subColor={pSubj.length > 0 ? '#FF6B35' : '#FF4444'}
-                  dashed={pSubj.length === 0}
-                />
-              </div>
-            </>
-          );
-        })}
+        {PROCESSES.map(proc => renderProcessBlock(proc))}
 
-        {renderSection(
-          'regulator',
-          <Node
-            sel={{ kind: 'regulator' }}
-            emoji="🏛"
-            label="РКН и регулятор"
-          />,
-          <>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <Stub width={12} />
+        {/* Регулятор */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <Stub color="#3A3A3A" width={14} />
+            <Node
+              sel={{ kind: 'regulator' }}
+              emoji="🏛"
+              label="РКН и регулятор"
+            />
+          </div>
+          <VLine color="#2A2A2A" height={10} marginLeft={24} />
+          <div style={{
+            marginLeft: '24px',
+            borderLeft: '2px solid #2A2A2A',
+            borderRadius: '0 0 0 10px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            paddingTop: '6px',
+            paddingBottom: '10px',
+          }}>
+            {renderChildRow(
+              'map',
               <Node
                 sel={{ kind: 'regulator' }}
                 emoji="🗺"
@@ -615,9 +639,9 @@ export default function DocTreePage() {
                 sub={systems.length > 0 ? '✅ данные есть' : '❌ нет ИС'}
                 subColor={systems.length > 0 ? '#00C853' : '#FF4444'}
               />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <Stub width={12} />
+            )}
+            {renderChildRow(
+              'rkn',
               <Node
                 sel={{ kind: 'regulator' }}
                 emoji="📨"
@@ -625,10 +649,14 @@ export default function DocTreePage() {
                 sub="в разработке"
                 subColor="#FFC107"
               />
-            </div>
-          </>
-        )}
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Завершение дерева: хвост линии + точка */}
+      <VLine color="#3A3A3A" height={12} marginLeft={10} />
+      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3A3A3A', marginLeft: '7px' }} />
     </div>
   );
 
