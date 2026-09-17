@@ -13,6 +13,17 @@ const nextConfig = {
       },
     ];
   },
+  // Прокси: браузер ходит на свой домен, Next.js серверно проксирует на бэкенд.
+  // Убирает кросс-доменные блокировки браузера. При переезде в РФ меняем
+  // destination на https://api.cplbox.ru/api/v1/:path*
+  async rewrites() {
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: 'https://compliance-box-backend.onrender.com/api/v1/:path*',
+      },
+    ];
+  },
 }
 
 module.exports = nextConfig

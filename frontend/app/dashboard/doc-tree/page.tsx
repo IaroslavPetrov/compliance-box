@@ -7,7 +7,7 @@ import { useToast } from '../../../contexts/ToastContext';
 import { useTenant } from '../../../contexts/TenantContext';
 import { IconTree, IconUsers, IconMap, IconFileText, IconClipboard, IconAlert } from '../../../components/icons';
 
-const API = 'https://compliance-box-backend.onrender.com/api/v1';
+const API = '/api/v1';
 
 interface PdSubject {
   id: number;
