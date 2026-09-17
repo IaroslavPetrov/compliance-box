@@ -48,14 +48,18 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
     { href: '/dashboard/compliance-check', label: 'Проверка сайта', icon: IconSearch },
   ];
 
-  const isActive = (item: NavItem) =>
-    item.exact ? pathname === item.href : pathname.startsWith(item.href);
+  // Подсветка активного раздела: сравниваем без query-параметров (?tenantId=...)
+  const isActive = (item: NavItem) => {
+    const path = item.href.split('?')[0];
+    return item.exact ? pathname === path : pathname.startsWith(path);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     router.push('/login');
   };
 
+  // Смена компании в селекторе
   const handleTenantChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = Number(e.target.value);
     const t = tenants.find((x) => x.id === id);
@@ -63,6 +67,7 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
 
     selectTenant(t);
 
+    // Если открыта страница, привязанная к компании — синхронизируем URL
     if (
       pathname.startsWith('/dashboard/registry') ||
       pathname.startsWith('/dashboard/documents') ||
@@ -84,6 +89,7 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
       gap: '1.5rem',
       boxSizing: 'border-box',
     }}>
+      {/* Логотип */}
       <div
         onClick={() => { router.push('/dashboard'); onClose(); }}
         style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}
@@ -96,6 +102,7 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
         </span>
       </div>
 
+      {/* Селектор компании */}
       <div style={{ flexShrink: 0 }}>
         <label style={{
           display: 'block',
@@ -155,6 +162,7 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
         </button>
       </div>
 
+      {/* Навигация */}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1, overflowY: 'auto' }}>
         {navItems.map((item) => {
           const active = isActive(item);
@@ -192,6 +200,7 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
         })}
       </nav>
 
+      {/* Выход */}
       <button
         onClick={handleLogout}
         style={{
@@ -218,6 +227,7 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
     </div>
   );
 
+  // Десктоп: фиксированная колонка слева
   if (!isMobile) {
     return (
       <aside style={{
@@ -236,6 +246,7 @@ export default function Sidebar({ open = false, onClose = () => {} }: SidebarPro
     );
   }
 
+  // Мобильный: выдвижная панель (drawer)
   return (
     <>
       {open && (
